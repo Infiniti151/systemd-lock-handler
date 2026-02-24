@@ -188,7 +188,7 @@ func main() {
 	}
 	log.Println("Running for user:", user.Username)
 
-	ListenForSleep()
+	//ListenForSleep()
 	ListenForLock(user)
 
 	log.Println("Initialization complete.")

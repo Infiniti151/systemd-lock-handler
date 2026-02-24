@@ -1,8 +1,10 @@
 module git.sr.ht/~whynothugo/systemd-lock-handler
 
-go 1.16
+go 1.25
 
 require (
-	github.com/coreos/go-systemd/v22 v22.3.2
-	github.com/godbus/dbus/v5 v5.0.4
+	github.com/coreos/go-systemd/v22 v22.7.0
+	github.com/godbus/dbus/v5 v5.2.2
 )
+
+require golang.org/x/sys v0.27.0 // indirect
