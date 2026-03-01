@@ -1,11 +1,7 @@
 systemd-lock-handler
 ====================
-[Source](https://git.sr.ht/~whynothugo/systemd-lock-handler) |
-[Issues](https://todo.sr.ht/~whynothugo/systemd-lock-handler) |
-[Patches](https://lists.sr.ht/~whynothugo/public-inbox) |
-[Chat](irc://ircs.libera.chat:6697/#whynothugo)
 
-[![builds.sr.ht status](https://builds.sr.ht/~whynothugo/systemd-lock-handler/commits/.build.yml.svg)](https://builds.sr.ht/~whynothugo/systemd-lock-handler/commits/.build.yml?)
+[![Build](https://img.shields.io/github/actions/workflow/status/Infiniti151/systemd-lock-handler/build.yml?branch=main&event=schedule&style=for-the-badge&labelColor=489FC3)](https://github.com/Infiniti151/systemd-lock-handler/actions/workflows/build.yml) [![Downloads](https://img.shields.io/github/downloads/Infiniti151/systemd-lock-handler/total.svg?Label=Downloads&style=for-the-badge&labelColor=489FC3&color=E38A27)](https://github.com/Infiniti151/systemd-lock-handler/releases)
 
 `logind` (part of systemd) emits events when the system is locked, unlocked or
 goes into sleep.
@@ -36,17 +32,15 @@ package does not conflict, but rather compliments that one.
 Installation
 ------------
 
-## On ArchLinux
+## Package install
 
-A package is available in the AUR:
+Install the latest release from the releases page (RPM/DEB)
 
-    paru -S systemd-lock-handler
-
-## Other platforms
+## Manual install
 
 You can manually build and install:
 
-    git@git.sr.ht:~whynothugo/systemd-lock-handler
+    git clone https://github.com/Infiniti151/systemd-lock-handler.git
     cd systemd-lock-handler
     make build
     sudo make install
@@ -121,59 +115,3 @@ Sleep your device using `systemctl suspend`.
 This will start `sleep.target` along with any services that are `WantedBy` it.
 This will happen _before_ the system is suspended.
 
-Changelog
----------
-
-## 2.4.1
-
-- Fixed regression introduced in 2.4.0.
-
-## 2.4.0
-
-- Sleeping will be now inhibited when `systemd-lock-handler` starts. This
-  ensure that there is enough time to react before the system actually goes to
-  sleep. See [this article] for some background on how this. See also the
-  updated example in the README to ensure that your screen locker has actually
-  locked the screen before sleeping continues.
-
-[this article]: https://whynothugo.nl/journal/2022/10/26/systemd-locking-and-sleeping/
-
-## 2.3.0
-
-- `sleep.target` now requires `lock.target` itself. So for any services that
-  should be started when either locking or suspending the system, specifying
-  `WantedBy=lock.target` is enough.
-- Fixed a bug where lock some services wouldn't be stopped after waking up
-  and then unlocking a system.
-
-## 2.2.0
-
-- Also handle unlock events (and translate those to unlock.target).
-
-## 2.1.0
-
-- Minor bugfixes.
-- Run as `Type=notify`.
-
-## 2.0.0
-
-- Rewrite in go.
-- Move binary into /usr/lib.
-
-## 1.1.0
-
-- Use newer logind API.
-- Events for other sessions are now correctly ignored.
-
-## 1.0.0
-
-Also handle sleep target.
-
-## 0.1.0
-
-Initial release.
-
-LICENCE
--------
-
-systemd-lock-handler is licensed under the ISC licence. See LICENCE for details.
