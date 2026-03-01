@@ -5,6 +5,9 @@ systemd-lock-handler*
 *.rpm
 *.deb
 
+# Checksum
+hashes.sha256*
+
 # Go workspace/test files
 *.test
 *.out

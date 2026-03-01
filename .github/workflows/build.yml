@@ -131,16 +131,25 @@ jobs:
         run: |
           git push
 
-      - name: Import GPG Key
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+      
+      - name: Configure RPM Macros
         run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
-          # Setup macros for rpmsign
-          echo "%_signature gpg" > ~/.rpmmacros
-          echo "%_gpg_name Infiniti151 <43163551+Infiniti151@users.noreply.github.com>" >> ~/.rpmmacros
-          echo "%_gpg_path /home/runner/.gnupg" >> ~/.rpmmacros
-          echo "%__gpg $(which gpg)" >> ~/.rpmmacros
+          cat <<EOF > ~/.rpmmacros
+          %_signature gpg
+          %_gpg_name Infiniti151 <43163551+Infiniti151@users.noreply.github.com>
+          %_gpg_path /home/runner/.gnupg
+          %__gpg $(command -v gpg)
+          EOF
 
-      - name: Build Packages
+      - name: Export public GPG key
+        run: |
+          gpg --batch --armor --export "43163551+Infiniti151@users.noreply.github.com" > public.key
+
+      - name: Build, package, sign, and create checksums
         run: |
           make release
 
@@ -148,11 +157,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.release_number.outputs.release_number }}
-          name: Release v${{ steps.release_number.outputs.release_number }} systemd-lock-handler
+          name: v${{ steps.release_number.outputs.release_number }}
           files: |
             systemd-lock-handler-v${{ steps.release_number.outputs.release_number }}.rpm
             systemd-lock-handler-v${{ steps.release_number.outputs.release_number }}.deb
-            hashes.sha256
+            hashes.sha256.asc
+            public.key
           body: |
             Release #${{ steps.release_number.outputs.release_number }}
 

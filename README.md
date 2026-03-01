@@ -1,7 +1,7 @@
 systemd-lock-handler
 ====================
 
-[![Build](https://img.shields.io/github/actions/workflow/status/Infiniti151/systemd-lock-handler/build.yml?branch=main&event=schedule&style=for-the-badge&labelColor=489FC3)](https://github.com/Infiniti151/systemd-lock-handler/actions/workflows/build.yml) [![Downloads](https://img.shields.io/github/downloads/Infiniti151/systemd-lock-handler/total.svg?Label=Downloads&style=for-the-badge&labelColor=489FC3&color=E38A27)](https://github.com/Infiniti151/systemd-lock-handler/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/Infiniti151/systemd-lock-handler/build.yml?branch=main&style=for-the-badge&labelColor=489FC3)](https://github.com/Infiniti151/systemd-lock-handler/actions/workflows/build.yml) [![Downloads](https://img.shields.io/github/downloads/Infiniti151/systemd-lock-handler/total.svg?Label=Downloads&style=for-the-badge&labelColor=489FC3&color=E38A27)](https://github.com/Infiniti151/systemd-lock-handler/releases)
 
 `logind` (part of systemd) emits events when the system is locked, unlocked or
 goes into sleep.
@@ -32,11 +32,31 @@ package does not conflict, but rather compliments that one.
 Installation
 ------------
 
-## Package install
+## 🛡️ Verified Package Installation
 
-Install the latest release from the releases page (RPM/DEB)
+This package is digitally signed. To verify the integrity of the download:
+### Redhat based systems
 
-## Manual install
+1. **Import the public key:**
+   ```bash
+   curl -L https://github.com/Infiniti151/systemd-lock-handler/releases/latest/download/public.key | sudo rpm --import -
+
+2. **Install RPM:**
+   ```bash
+   sudo dnf install https://github.com/Infiniti151/systemd-lock-handler/releases/latest/download/systemd-lock-handler-v<version>.rpm
+
+### Debian based systems
+
+1. **Import the public key:**
+   ```bash
+   curl -L https://github.com/Infiniti151/systemd-lock-handler/releases/latest/download/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/infiniti151-archive-keyring.gpg > /dev/null
+
+3. **Install DEB:**
+   ```bash
+   curl -L -O https://github.com/Infiniti151/systemd-lock-handler/releases/latest/download/systemd-lock-handler-v<version>.deb
+   sudo apt install ./systemd-lock-handler-v<version>.deb
+
+## 🛠️ Manual Installation
 
 You can manually build and install:
 

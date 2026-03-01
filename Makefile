@@ -30,7 +30,7 @@ fpm-packages: build
 	@echo "Packaging version ${VERSION}..."
 	for type in rpm deb; do \
 		fpm -s dir -t $$type \
-			-n ${NAME} \
+		    -n ${NAME} \
 			-v ${VERSION} \
 			--prefix ${PREFIX} \
 			--license ${LICENSE} \
@@ -48,22 +48,19 @@ fpm-packages: build
 sign:
 	@echo "Signing RPM package..."
 	rpmsign --addsign ${NAME}-v${VERSION}.rpm
-	@echo "Package signed successfully."
+	
 	@echo "Signing Debian package..."
 	debsigs --sign=origin --default-key="$(GPG_IDENTITY)" ${NAME}-v${VERSION}.deb
-	@echo "Package signed successfully."
 
-checksums: 
-	sha256sum *.rpm *.deb > hashes.sha256
+checksums:
+	sha256sum ${NAME}-v${VERSION}.* > hashes.sha256
+	gpg --batch --yes --clearsign --digest-algo SHA256 hashes.sha256
+	rm hashes.sha256
 
 release: fpm-packages sign checksums
 	@echo "Build, Packaging, Signing, and Checksums complete."
 
-# Local convenience targets
-rpm: test fpm-packages
-deb: test fpm-packages
-
 clean:
-	rm -f ${NAME} *.rpm *.deb hashes.sha256
+	rm -f ${NAME} *.rpm *.deb *.asc
 
-.PHONY: all build test install rpm deb fpm-packages checksums release clean
+.PHONY: all build test install fpm-packages sign checksums release clean
