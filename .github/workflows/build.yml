@@ -63,11 +63,15 @@ jobs:
         with:
           go-version: ${{ needs.check-updates.outputs.latest_go }}
 
-      - name: Setup git config
+      - name: Import GPG key
         if: success()
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          git_config_global: true
+          git_tag_gpgsign: true
 
       - name: Update dependencies and source code
         run: |
@@ -130,11 +134,6 @@ jobs:
         if: success()
         run: |
           git push
-
-      - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
       
       - name: Configure RPM Macros
         run: |
