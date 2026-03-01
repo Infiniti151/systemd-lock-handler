@@ -142,6 +142,7 @@ jobs:
           %_gpg_name Infiniti151 <43163551+Infiniti151@users.noreply.github.com>
           %_gpg_path /home/runner/.gnupg
           %__gpg $(command -v gpg)
+          %__gpg_sign_args --batch --no-tty --pinentry-mode loopback
           EOF
 
       - name: Export public GPG key

@@ -47,7 +47,7 @@ fpm-packages: build
 
 sign:
 	@echo "Signing RPM package..."
-	rpmsign --addsign --gpg-args "--batch --no-tty --pinentry-mode loopback" ${NAME}-v${VERSION}.rpm
+	rpmsign --addsign ${NAME}-v${VERSION}.rpm
 	
 	@echo "Signing Debian package..."
 	debsigs --sign=origin --default-key="$(GPG_IDENTITY)" ${NAME}-v${VERSION}.deb
