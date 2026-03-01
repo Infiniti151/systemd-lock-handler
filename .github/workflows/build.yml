@@ -122,9 +122,8 @@ jobs:
 
       - name: Install packaging dependencies
         run: |
-          sudo add-apt-repository universe
           sudo apt-get update
-          sudo apt-get install -y ruby ruby-dev build-essential rpm dpkg-sig
+          sudo apt-get install -y ruby ruby-dev build-essential rpm debsigs
           sudo gem install --no-document fpm
 
       - name: Push updated files

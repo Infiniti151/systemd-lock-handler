@@ -6,6 +6,7 @@ LICENSE=ISC
 MAINTAINER=Infiniti151
 URL=https://github.com/Infiniti151/systemd-lock-handler
 DESCRIPTION="A systemd user service to handle lock/unlock events and trigger custom actions."
+GPG_IDENTITY=Infiniti151 <43163551+Infiniti151@users.noreply.github.com>
 
 all: build
 
@@ -45,8 +46,12 @@ fpm-packages: build
 	done
 
 sign:
+	@echo "Signing RPM package..."
 	rpmsign --addsign ${NAME}-v${VERSION}.rpm
-	dpkg-sig --sign builder ${NAME}-v${VERSION}.deb
+	@echo "Package signed successfully."
+	@echo "Signing Debian package..."
+	debsigs --sign=origin --default-key="$(GPG_IDENTITY)" ${NAME}-v${VERSION}.deb
+	@echo "Package signed successfully."
 
 checksums: 
 	sha256sum *.rpm *.deb > hashes.sha256
