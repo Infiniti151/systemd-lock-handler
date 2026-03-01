@@ -1,1 +1,11 @@
-systemd-lock-handler
+# Binaries
+systemd-lock-handler*
+
+# Package files
+*.rpm
+*.deb
+
+# Go workspace/test files
+*.test
+*.out
+vendor/

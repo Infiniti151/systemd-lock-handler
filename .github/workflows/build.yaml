@@ -1,0 +1,161 @@
+name: Weekly Update & Release
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'   # every Sunday
+  workflow_dispatch:
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_update: ${{ steps.check.outputs.needs_update }}
+      current_go: ${{ steps.check.outputs.current_go }}
+      latest_go: ${{ steps.check.outputs.latest_go }}
+      current_sysd: ${{ steps.check.outputs.current_sysd }}
+      latest_sysd: ${{ steps.check.outputs.latest_sysd }}
+      current_dbus: ${{ steps.check.outputs.current_dbus }}
+      latest_dbus: ${{ steps.check.outputs.latest_dbus }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check latest versions
+        id: check
+        run: |
+          current_go=$(grep '^go ' go.mod | awk '{print $2}')
+          latest_go=$(curl -s https://go.dev/VERSION?m=text | head -n1 | sed 's/^go//')
+
+          current_sysd=$(grep 'github.com/coreos/go-systemd' go.mod | awk '{print $2}')
+          current_dbus=$(grep 'github.com/godbus/dbus' go.mod | awk '{print $2}')
+
+          latest_sysd=$(curl -s https://api.github.com/repos/coreos/go-systemd/tags | jq -r '.[0].name')
+          latest_dbus=$(curl -s https://api.github.com/repos/godbus/dbus/tags | jq -r '.[0].name')
+
+          if [ -z "$latest_go" ] || [ -z "$latest_sysd" ] || [ -z "$latest_dbus" ]; then
+            echo "::error::One or more latest version lookups failed (empty string)."
+            echo "Go: [$latest_go] Sysd: [$latest_sysd] Dbus: [$latest_dbus]"
+            exit 1
+          fi
+
+          echo "current_go=$current_go" >> $GITHUB_OUTPUT
+          echo "latest_go=$latest_go" >> $GITHUB_OUTPUT
+          echo "current_sysd=$current_sysd" >> $GITHUB_OUTPUT
+          echo "latest_sysd=$latest_sysd" >> $GITHUB_OUTPUT
+          echo "current_dbus=$current_dbus" >> $GITHUB_OUTPUT
+          echo "latest_dbus=$latest_dbus" >> $GITHUB_OUTPUT
+
+          needs_update=false
+          if [ "$current_go" != "$latest_go" ]; then needs_update=true; fi
+          if [ "$current_sysd" != "$latest_sysd" ]; then needs_update=true; fi
+          if [ "$current_dbus" != "$latest_dbus" ]; then needs_update=true; fi
+
+          echo "needs_update=$needs_update" >> $GITHUB_OUTPUT
+
+  build-release:
+    needs: check-updates
+    if: needs.check-updates.outputs.needs_update == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ needs.check-updates.outputs.latest_go }}
+
+      - name: Setup git config
+        if: success()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update dependencies and source code
+        run: |
+          if [ "${{ needs.check-updates.outputs.current_go }}" != "${{ needs.check-updates.outputs.latest_go }}" ]; then
+            go mod edit -go=${{ needs.check-updates.outputs.latest_go }}
+          fi
+
+          if [ "${{ needs.check-updates.outputs.current_sysd }}" != "${{ needs.check-updates.outputs.latest_sysd }}" ]; then
+            old_v=$(echo "${{ needs.check-updates.outputs.current_sysd }}" | sed -E 's/^v([0-9]+).*/\1/')
+            new_v=$(echo "${{ needs.check-updates.outputs.latest_sysd }}" | sed -E 's/^v([0-9]+).*/\1/')
+            
+            [ "$old_v" != "$new_v" ] && sed -i "s|go-systemd/v${old_v}|go-systemd/v${new_v}|g" *.go
+            
+            go get -u github.com/coreos/go-systemd/v${new_v}
+            rm go.sum
+          fi
+
+          if [ "${{ needs.check-updates.outputs.current_dbus }}" != "${{ needs.check-updates.outputs.latest_dbus }}" ]; then
+            old_v=$(echo "${{ needs.check-updates.outputs.current_dbus }}" | sed -E 's/^v([0-9]+).*/\1/')
+            new_v=$(echo "${{ needs.check-updates.outputs.latest_dbus }}" | sed -E 's/^v([0-9]+).*/\1/')
+            
+            [ "$old_v" != "$new_v" ] && sed -i "s|dbus/v${old_v}|dbus/v${new_v}|g" *.go
+            
+            go get -u github.com/godbus/dbus/v${new_v}
+            rm go.sum
+          fi
+
+          go mod tidy
+
+      - name: Increment release number
+        id: release_number
+        run: |
+          if [ -f .release_number ]; then
+            number=$(($(cat .release_number)+1))
+          else
+            number=1
+          fi
+          echo $number > .release_number
+          echo "release_number=$number" >> $GITHUB_OUTPUT
+
+      - name: Run Tests
+        run: |
+          # Use dbus-run-session to provide a mock bus for your connection tests
+          sudo apt-get install -y dbus-x11
+          dbus-run-session -- make test
+
+      - name: Commit updated files
+        if: success()
+        run: |
+          git add .
+          git commit -m "Increment release number to ${{ steps.release_number.outputs.release_number }}"
+          git push
+
+      - name: Install packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev build-essential rpm rpm-build dpkg-sig
+          sudo gem install --no-document fpm
+
+      - name: Import GPG Key
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+          # Setup macros for rpmsign
+          echo "%_signature gpg" > ~/.rpmmacros
+          echo "%_gpg_name Infiniti151 <43163551+Infiniti151@users.noreply.github.com>" >> ~/.rpmmacros
+          echo "%_gpg_path /home/runner/.gnupg" >> ~/.rpmmacros
+          echo "%__gpg $(which gpg)" >> ~/.rpmmacros
+
+      - name: Build Packages
+        run: |
+          make release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.release_number.outputs.release_number }}
+          name: Release v${{ steps.release_number.outputs.release_number }} systemd-lock-handler
+          files: |
+            systemd-lock-handler-v${{ steps.release_number.outputs.release_number }}.rpm
+            systemd-lock-handler-v${{ steps.release_number.outputs.release_number }}.deb
+            hashes.sha256
+          body: |
+            Release #${{ steps.release_number.outputs.release_number }}
+
+            Built with:
+            - Go version: ${{ needs.check-updates.outputs.latest_go }}
+            - coreos/go-systemd: ${{ needs.check-updates.outputs.latest_sysd }}
+            - godbus/dbus: ${{ needs.check-updates.outputs.latest_dbus }}
+
+            Note:
+            - sleep.target is present in the Makefile but commented out, so it is excluded from installation and packaging.
