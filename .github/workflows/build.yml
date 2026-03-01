@@ -119,13 +119,17 @@ jobs:
         run: |
           git add .
           git commit -m "Increment release number to ${{ steps.release_number.outputs.release_number }}"
-          git push
 
       - name: Install packaging dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ruby ruby-dev build-essential rpm rpm-build dpkg-sig
           sudo gem install --no-document fpm
+
+      - name: Push updated files
+        if: success()
+        run: |
+          git push
 
       - name: Import GPG Key
         run: |
