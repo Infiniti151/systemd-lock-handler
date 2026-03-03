@@ -12,3 +12,6 @@ hashes.sha256*
 *.test
 *.out
 vendor/
+
+# act files
+.secrets

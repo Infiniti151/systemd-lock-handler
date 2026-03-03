@@ -16,6 +16,9 @@ jobs:
       latest_sysd: ${{ steps.check.outputs.latest_sysd }}
       current_dbus: ${{ steps.check.outputs.current_dbus }}
       latest_dbus: ${{ steps.check.outputs.latest_dbus }}
+      current_sys: ${{ steps.check.outputs.current_sys }}
+      latest_sys: ${{ steps.check.outputs.latest_sys }}
+    
     steps:
       - uses: actions/checkout@v6
 
@@ -27,13 +30,15 @@ jobs:
 
           current_sysd=$(grep 'github.com/coreos/go-systemd' go.mod | awk '{print $2}')
           current_dbus=$(grep 'github.com/godbus/dbus' go.mod | awk '{print $2}')
+          current_sys=$(grep 'golang.org/x/sys' go.mod | awk '{print $3}')
 
           latest_sysd=$(curl -s https://api.github.com/repos/coreos/go-systemd/tags | jq -r '.[0].name')
           latest_dbus=$(curl -s https://api.github.com/repos/godbus/dbus/tags | jq -r '.[0].name')
+          latest_sys=$(curl -s https://proxy.golang.org/golang.org/x/sys/@latest | jq -r .Version)
 
-          if [ -z "$latest_go" ] || [ -z "$latest_sysd" ] || [ -z "$latest_dbus" ]; then
+          if (( ${#latest_go} * ${#latest_sysd} * ${#latest_dbus} * ${#latest_sys} == 0 )); then
             echo "::error::One or more latest version lookups failed (empty string)."
-            echo "Go: [$latest_go] Sysd: [$latest_sysd] Dbus: [$latest_dbus]"
+            echo "Go: [$latest_go] Sysd: [$latest_sysd] Dbus: [$latest_dbus] Sys: [$latest_sys]"
             exit 1
           fi
 
@@ -43,11 +48,10 @@ jobs:
           echo "latest_sysd=$latest_sysd" >> $GITHUB_OUTPUT
           echo "current_dbus=$current_dbus" >> $GITHUB_OUTPUT
           echo "latest_dbus=$latest_dbus" >> $GITHUB_OUTPUT
+          echo "current_sys=$current_sys" >> $GITHUB_OUTPUT
+          echo "latest_sys=$latest_sys" >> $GITHUB_OUTPUT
 
-          needs_update=false
-          if [ "$current_go" != "$latest_go" ]; then needs_update=true; fi
-          if [ "$current_sysd" != "$latest_sysd" ]; then needs_update=true; fi
-          if [ "$current_dbus" != "$latest_dbus" ]; then needs_update=true; fi
+          [ $current_go$current_sysd$current_dbus$current_sys != $latest_go$latest_sysd$latest_dbus$latest_sys ] && needs_update=true || needs_update=false
 
           echo "needs_update=$needs_update" >> $GITHUB_OUTPUT
 
@@ -99,30 +103,33 @@ jobs:
             rm go.sum
           fi
 
+          if [ "${{ needs.check-updates.outputs.current_sys }}" != "${{ needs.check-updates.outputs.latest_sys }}" ]; then
+            
+            go get -u golang.org/x/sys@${{ needs.check-updates.outputs.latest_sys }}
+            rm go.sum
+          fi
+
           go mod tidy
 
-      - name: Increment release number
+      - name: Compute next release number
         id: release_number
         run: |
-          if [ -f .release_number ]; then
-            number=$(($(cat .release_number)+1))
-          else
-            number=1
-          fi
-          echo $number > .release_number
-          echo "release_number=$number" >> $GITHUB_OUTPUT
+          git fetch --tags
+          latest=$(git tag | grep '^v[0-9]\+$' | sort -V | tail -n1)
+          num=${latest#v}
+          next=$(( ${num:-0} + 1 ))
+          echo "release_number=$next" >> $GITHUB_OUTPUT
+          echo "Next release number: $next"
 
       - name: Run Tests
         run: |
-          # Use dbus-run-session to provide a mock bus for your connection tests
-          sudo apt-get install -y dbus-x11
           dbus-run-session -- make test
 
       - name: Commit updated files
         if: success()
         run: |
           git add .
-          git commit -m "Increment release number to ${{ steps.release_number.outputs.release_number }}"
+          git commit -m "Update dependencies for release v${{ steps.release_number.outputs.release_number }}"
 
       - name: Install packaging dependencies
         run: |
@@ -140,7 +147,7 @@ jobs:
           cat <<EOF > ~/.rpmmacros
           %_signature gpg
           %_gpg_name Infiniti151 <43163551+Infiniti151@users.noreply.github.com>
-          %_gpg_path /home/runner/.gnupg
+          %_gpg_path ~/.gnupg
           %__gpg $(command -v gpg)
           %__gpg_sign_args --batch --no-tty --pinentry-mode loopback
           EOF
@@ -151,7 +158,7 @@ jobs:
 
       - name: Build, package, sign, and create checksums
         run: |
-          make release
+          make release VERSION=${{ steps.release_number.outputs.release_number }} 
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -170,6 +177,7 @@ jobs:
             - Go version: ${{ needs.check-updates.outputs.latest_go }}
             - coreos/go-systemd: ${{ needs.check-updates.outputs.latest_sysd }}
             - godbus/dbus: ${{ needs.check-updates.outputs.latest_dbus }}
+            - golang.org/x/sys: ${{ needs.check-updates.outputs.latest_sys }}
 
             Note:
             - sleep.target is present in the Makefile but commented out, so it is excluded from installation and packaging.

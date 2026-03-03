@@ -1,7 +1,7 @@
 DESTDIR?=/
 PREFIX=/usr
 NAME=systemd-lock-handler
-VERSION=$(shell cat .release_number)
+VERSION=1
 LICENSE=ISC
 MAINTAINER=Infiniti151
 URL=https://github.com/Infiniti151/systemd-lock-handler
