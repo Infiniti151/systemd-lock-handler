@@ -42,18 +42,46 @@ jobs:
             exit 1
           fi
 
-          echo "current_go=$current_go" >> $GITHUB_OUTPUT
-          echo "latest_go=$latest_go" >> $GITHUB_OUTPUT
-          echo "current_sysd=$current_sysd" >> $GITHUB_OUTPUT
-          echo "latest_sysd=$latest_sysd" >> $GITHUB_OUTPUT
-          echo "current_dbus=$current_dbus" >> $GITHUB_OUTPUT
-          echo "latest_dbus=$latest_dbus" >> $GITHUB_OUTPUT
-          echo "current_sys=$current_sys" >> $GITHUB_OUTPUT
-          echo "latest_sys=$latest_sys" >> $GITHUB_OUTPUT
+          GREEN='\e[32m'
+          RED='\e[31m'
+          BOLD='\e[1m'
+          RESET='\e[0m'
+          LINE="+----------------------+--------------+--------------+"
+          FMT="| %-20s | %-12s | %-12s |\n"
 
-          [ $current_go$current_sysd$current_dbus$current_sys != $latest_go$latest_sysd$latest_dbus$latest_sys ] && needs_update=true || needs_update=false
+          print_row() {
+              local color=$RED
+              [[ "$2" == "$3" ]] && color=$GREEN
+              printf "${color}${FMT}${RESET}" "$1" "$2" "$3"
+          }
 
-          echo "needs_update=$needs_update" >> $GITHUB_OUTPUT
+          echo -e "\n${BOLD}Dependency Update Check${RESET}"
+          echo "$LINE"
+          printf "${BOLD}${FMT}${RESET}" "NAME" "CURRENT" "LATEST"
+          echo "$LINE"
+          print_row "go" "$current_go" "$latest_go"
+          print_row "go-systemd" "$current_sysd" "$latest_sysd"
+          print_row "dbus" "$current_dbus" "$latest_dbus"
+          print_row "x/sys" "$current_sys" "$latest_sys"
+          echo -e "$LINE\n"
+
+          {
+            echo "current_go=$current_go"
+            echo "latest_go=$latest_go"
+            echo "current_sysd=$current_sysd"
+            echo "latest_sysd=$latest_sysd"
+            echo "current_dbus=$current_dbus"
+            echo "latest_dbus=$latest_dbus"
+            echo "current_sys=$current_sys"
+            echo "latest_sys=$latest_sys"
+            
+            # Use double brackets for safer string comparison in Bash
+            if [[ "$current_go$current_sysd$current_dbus$current_sys" != "$latest_go$latest_sysd$latest_dbus$latest_sys" ]]; then
+              echo "needs_update=true"
+            else
+              echo "needs_update=false"
+            fi
+          } >> "$GITHUB_OUTPUT"
 
   build-release:
     needs: check-updates
