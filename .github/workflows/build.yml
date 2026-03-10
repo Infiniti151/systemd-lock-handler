@@ -1,6 +1,14 @@
 name: Daily Update & Release
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**.go'         
+      - '!go.mod'           
+      - '!go.sum'
+      - '!Makefile'
   schedule:
     - cron: "0 2 * * *"
   workflow_dispatch:
@@ -158,7 +166,11 @@ jobs:
         if: success()
         run: |
           git add .
-          git commit -m "Update dependencies for release v${{ steps.release_number.outputs.release_number }}"
+          if ! git diff --cached --quiet; then
+            git commit -m "Update dependencies for release v${{ steps.release_number.outputs.release_number }} [skip ci]"
+          else
+            echo "No changes to commit"
+          fi
 
       - name: Install packaging dependencies
         run: |
@@ -181,24 +193,20 @@ jobs:
           %__gpg_sign_args --batch --no-tty --pinentry-mode loopback
           EOF
 
-      - name: Export public GPG key
-        run: |
-          gpg --batch --armor --export "43163551+Infiniti151@users.noreply.github.com" > public.key
-
       - name: Build, package, sign, and create checksums
         run: |
           make release VERSION=${{ steps.release_number.outputs.release_number }} 
+
+      - name: Export public GPG key
+        run: |
+          gpg --batch --armor --export "43163551+Infiniti151@users.noreply.github.com" > out/public.key
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.release_number.outputs.release_number }}
           name: v${{ steps.release_number.outputs.release_number }}
-          files: |
-            systemd-lock-handler-v${{ steps.release_number.outputs.release_number }}.rpm
-            systemd-lock-handler-v${{ steps.release_number.outputs.release_number }}.deb
-            hashes.sha256.asc
-            public.key
+          files: out/*
           body: |
             Release #${{ steps.release_number.outputs.release_number }}
 
@@ -208,5 +216,3 @@ jobs:
             - godbus/dbus: ${{ needs.check-updates.outputs.latest_dbus }}
             - golang.org/x/sys: ${{ needs.check-updates.outputs.latest_sys }}
 
-            Note:
-            - sleep.target is present in the Makefile but commented out, so it is excluded from installation and packaging.
