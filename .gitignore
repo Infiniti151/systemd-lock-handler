@@ -1,17 +1,16 @@
-# Binaries
-systemd-lock-handler*
+# --- Build Artifacts ---
+/out/
+/dist/*.ready
 
-# Package files
-*.rpm
-*.deb
+# --- Go Dependencies ---
+systemd-lock-handler
+/vendor/
 
-# Checksum
-hashes.sha256*
+# --- Development Tools ---
+.micro/
+.vscode/
+*.swp
 
-# Go workspace/test files
-*.test
-*.out
-vendor/
-
-# act files
+# --- ACT Files ---
+*.act
 .secrets

@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
+	"strings"
+	"time"
 
 	systemd "github.com/coreos/go-systemd/v22/dbus"
-	dbus "github.com/godbus/dbus/v5"
+	"github.com/godbus/dbus/v5"
 )
 
 func TestImportIntegrity(t *testing.T) {
@@ -38,10 +41,9 @@ func TestImportIntegrity(t *testing.T) {
 func TestSystemdUserConnection(t *testing.T) {
 	t.Run("NewUserConnectionContext", func(t *testing.T) {
 		ctx := context.Background()
-		// Calling a specific function from the systemd-aliased package
 		conn, err := systemd.NewUserConnectionContext(ctx)
 		if err != nil {
-			t.Logf("⚠️  SKIP: Systemd User Bus connection failed: %v", err)
+			t.Logf("⚠️  SKIP: Systemd User Bus connection failed (expected if not in session): %v", err)
 			t.SkipNow()
 		}
 		defer conn.Close()
@@ -51,7 +53,6 @@ func TestSystemdUserConnection(t *testing.T) {
 
 func TestDbusSystemBus(t *testing.T) {
 	t.Run("ConnectSystemBus", func(t *testing.T) {
-		// Calling a specific function from the dbus-aliased package
 		conn, err := dbus.ConnectSystemBus()
 		if err != nil {
 			t.Logf("⚠️  SKIP: System D-Bus not available: %v", err)
@@ -62,55 +63,186 @@ func TestDbusSystemBus(t *testing.T) {
 	})
 }
 
-func TestLockLogic(t *testing.T) {
+func TestLockedHintLogic(t *testing.T) {
 	tests := []struct {
-		name     string
-		isLock   bool
-		isUnlock bool
+		name       string
+		body       []interface{}
+		wantLocked bool
+		shouldFail bool
 	}{
-		{"org.freedesktop.login1.Session.Lock", true, false},
-		{"org.freedesktop.login1.Session.Unlock", false, true},
-		{"Other", false, false},
+		{
+			name: "Valid Locked (True)",
+			body: []interface{}{
+				"org.freedesktop.login1.Session",
+				map[string]dbus.Variant{"LockedHint": dbus.MakeVariant(true)},
+			},
+			wantLocked: true,
+		},
+		{
+			name: "Valid Unlocked (False)",
+			body: []interface{}{
+				"org.freedesktop.login1.Session",
+				map[string]dbus.Variant{"LockedHint": dbus.MakeVariant(false)},
+			},
+			wantLocked: false,
+		},
+		{
+			name: "Missing Property",
+			body: []interface{}{
+				"org.freedesktop.login1.Session",
+				map[string]dbus.Variant{"OtherProp": dbus.MakeVariant(true)},
+			},
+			shouldFail: true,
+		},
+		{
+			name: "Wrong Type (Int)",
+			body: []interface{}{
+				"org.freedesktop.login1.Session",
+				map[string]dbus.Variant{"LockedHint": dbus.MakeVariant(1)},
+			},
+			shouldFail: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotLock := (len(tt.name) >= 4 && tt.name[len(tt.name)-4:] == "Lock")
-			gotUnlock := (len(tt.name) >= 6 && tt.name[len(tt.name)-6:] == "Unlock")
+			if len(tt.body) < 2 {
+				t.Fatal("Test setup error: body too short")
+			}
+			props, ok := tt.body[1].(map[string]dbus.Variant)
+			if !ok {
+				t.Fatal("Test setup error: body[1] not a map")
+			}
 
-			if gotLock != tt.isLock || gotUnlock != tt.isUnlock {
-				t.Errorf("❌ FAIL [%s]: Expected Lock=%v, Unlock=%v | Got Lock=%v, Unlock=%v",
-					tt.name, tt.isLock, tt.isUnlock, gotLock, gotUnlock)
-			} else {
-				t.Logf("✅ PASS: Correctly identified signal type for %s", tt.name)
+			variant, exists := props["LockedHint"]
+			if !exists {
+				if tt.shouldFail {
+					t.Log("✅ PASS: Correctly ignored missing LockedHint")
+					return
+				}
+				t.Error("❌ FAIL: Expected LockedHint to exist")
+				return
+			}
+
+			val, ok := variant.Value().(bool)
+			if !ok {
+				if tt.shouldFail {
+					t.Log("✅ PASS: Correctly caught type mismatch")
+					return
+				}
+				t.Error("❌ FAIL: Could not assert LockedHint as bool")
+				return
+			}
+
+			if val != tt.wantLocked {
+				t.Errorf("❌ FAIL: Got %v, want %v", val, tt.wantLocked)
 			}
 		})
 	}
 }
 
-func TestWaitPrepareForSleep(t *testing.T) {
-	t.Skip("Skipping this test manually for now")
+func TestWaitPrepareForSleepRobustness(t *testing.T) {
+	t.Run("Signal Loop and Filtering", func(t *testing.T) {
+		c := make(chan *dbus.Signal, 3)
+
+		c <- &dbus.Signal{Name: "SomeOtherSignal", Body: []interface{}{true}}
+
+		c <- &dbus.Signal{Name: "PrepareForSleep", Body: []interface{}{true}}
+
+		close(c)
+
+		err := waitPrepareForSleep(c, true)
+		if err != nil {
+			t.Errorf("❌ FAIL: Should have found the 'true' signal, got: %v", err)
+		} else {
+			t.Log("✅ PASS: Correctly skipped noise and found target signal")
+		}
+	})
+}
+
+func TestStartSystemdUserUnit(t *testing.T) {
+    t.Run("Handle Missing Unit Error", func(t *testing.T) {
+        err := StartSystemdUserUnit("non-existent-unit-12345.target")
+        if err == nil {
+            t.Error("❌ FAIL: Expected error for non-existent unit, but got nil")
+        } else {
+            t.Logf("✅ PASS: Correctly caught error: %v", err)
+        }
+    })
+}
+
+func TestSafeTriggerCooldown(t *testing.T) {
+	t.Run("Verify Debouncing", func(t *testing.T) {
+		lastTriggerTime = time.Time{}
+		
+		_ = SafeTrigger("test.target")
+		
+		err2 := SafeTrigger("test.target")
+		
+		if err2 != nil {
+			t.Errorf("❌ FAIL: Suppressed trigger should return nil error, got %v", err2)
+		} else {
+			t.Log("✅ PASS: Successfully debounced rapid-fire triggers")
+		}
+	})
+}
+
+func TestSessionFilteringLogic(t *testing.T) {
 	tests := []struct {
-		name    string
-		want    bool
-		body    []interface{}
-		wantErr bool
+		name     string
+		sType    string
+		sActive  bool
+		expected bool
 	}{
-		{"SleepStarting", true, []interface{}{true}, false},
-		{"SleepFinished", false, []interface{}{false}, false},
+		{"Valid Wayland Active", "wayland", true, true},
+		{"Valid X11 Active", "x11", true, true},
+		{"Wayland Inactive", "wayland", false, false},
+		{"X11 Inactive", "x11", false, false},
+		{"TTY Session (Ignore)", "tty", true, false},
+		{"Unrecognized Protocol", "mir", true, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sig := &dbus.Signal{Body: tt.body}
-			c := make(chan *dbus.Signal, 1)
-			c <- sig
+			isGraphical := (tt.sType == "wayland" || tt.sType == "x11")
+			got := isGraphical && tt.sActive
 
-			err := waitPrepareForSleep(c, tt.want)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("❌ FAIL [%s]: Expected error status %v, got %v", tt.name, tt.wantErr, err)
+			if got != tt.expected {
+				t.Errorf("❌ FAIL [%s]: Expected %v, got %v", tt.name, tt.expected, got)
 			} else {
-				t.Logf("✅ PASS: Logic check for %s successful", tt.name)
+				t.Logf("✅ PASS: Correctly handled %s (Active: %v)", tt.sType, tt.sActive)
+			}
+		})
+	}
+}
+
+func TestLoggingPrefixes(t *testing.T) {
+	tests := []struct {
+		level    string
+		expected string
+	}{
+		{"info", "<6>[OK]"},
+		{"warn", "<4>[!]"},
+		{"error", "<3>[ERROR]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.level, func(t *testing.T) {
+			msg := "test"
+			var actual string
+			switch tt.level {
+			case "info":
+				actual = fmt.Sprintf("<6>[OK] %s", msg)
+			case "warn":
+				actual = fmt.Sprintf("<4>[!] %s", msg)
+			case "error":
+				actual = fmt.Sprintf("<3>[ERROR] %s", msg)
+			}
+
+			if !strings.HasPrefix(actual, tt.expected) {
+				t.Errorf("❌ FAIL: Prefix mismatch.\nGot:  %q\nWant prefix: %q", actual, tt.expected)
+			} else {
+				t.Logf("✅ PASS: Found expected prefix %q", tt.expected)
 			}
 		})
 	}

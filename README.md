@@ -62,13 +62,12 @@ You can manually build and install:
 
     git clone https://github.com/Infiniti151/systemd-lock-handler.git
     cd systemd-lock-handler
-    make build
-    sudo make install
+    make install
 
 Usage
 -----
 
-The service itself must be enabled for the current user:
+The service itself must be enabled for the current user (for package installs):
 
     systemctl --user enable --now systemd-lock-handler.service
 
@@ -134,4 +133,26 @@ Sleep your device using `systemctl suspend`.
 
 This will start `sleep.target` along with any services that are `WantedBy` it.
 This will happen _before_ the system is suspended.
+
+## Detection Toggling
+
+Be default, detection for all events (sleep, lock, and unlock) is enabled. This detection can be toggled individually via flags (-sleep, -lock, -unlock). These flags need to be added to the service file at /usr/lib/systemd/user/systemd-lock-handler.service. Example of lock and unlock detection turned off:
+
+```
+[Service]
+Slice=session.slice
+ExecStart=/usr/bin/systemd-lock-handler -lock=false -unlock=false
+```
+
+After adding the flags, reload the daemon and restart the service:
+```
+systemctl --user daemon-reload
+systemctl --user restart systemd-lock-handler
+```
+
+The detection status for all three events is shown in service status (```systemctl --user status systemd-lock-handler```):
+![alt text](image.png)
+
+
+
 

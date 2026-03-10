@@ -1,4 +1,4 @@
-module git.sr.ht/~whynothugo/systemd-lock-handler
+module github.com/Infiniti151/systemd-lock-handler
 
 go 1.26.1
 

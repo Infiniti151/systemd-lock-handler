@@ -1,0 +1,16 @@
+[Unit]
+Description=Logind lock event to systemd target translation
+Documentation=https://github.com/Infiniti151/systemd-lock-handler
+BindsTo=graphical-session.target
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Slice=session.slice
+ExecStart={{BIN_PATH}}
+Type=notify
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=graphical-session.target
