@@ -43,7 +43,7 @@ This package is digitally signed. To verify the integrity of the download:
 
 2. **Install RPM:**
    ```bash
-   sudo dnf install https://github.com/Infiniti151/systemd-lock-handler/releases/latest/download/systemd-lock-handler-v<version>.rpm
+   sudo dnf install $(curl -s https://api.github.com/repos/Infiniti151/systemd-lock-handler/releases/latest | grep "browser_download_url.*rpm" | cut -d '"' -f 4)
 
 ### Debian based systems
 
@@ -51,10 +51,11 @@ This package is digitally signed. To verify the integrity of the download:
    ```bash
    curl -L https://github.com/Infiniti151/systemd-lock-handler/releases/latest/download/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/infiniti151-archive-keyring.gpg > /dev/null
 
-3. **Install DEB:**
+2. **Install DEB:**
    ```bash
-   curl -L -O https://github.com/Infiniti151/systemd-lock-handler/releases/latest/download/systemd-lock-handler-v<version>.deb
-   sudo apt install ./systemd-lock-handler-v<version>.deb
+   curl -sL -o /tmp/lock-handler.deb $(curl -s https://api.github.com/repos/Infiniti151/systemd-lock-handler/releases/latest | grep "browser_download_url.*deb" | cut -d '"' -f 4) \
+   && sudo apt install /tmp/lock-handler.deb \
+   && rm /tmp/lock-handler.deb
 
 ## 🛠️ Manual Installation
 
@@ -150,7 +151,7 @@ systemctl --user daemon-reload
 systemctl --user restart systemd-lock-handler
 ```
 
-The detection status for all three events is shown in service status (```systemctl --user status systemd-lock-handler```):
+The detection status for all three events is shown in the service status (```systemctl --user status systemd-lock-handler```):
 ![alt text](image.png)
 
 
