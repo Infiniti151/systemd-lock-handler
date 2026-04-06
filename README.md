@@ -99,17 +99,15 @@ locks the session and before the system goes to sleep:
     [Install]
     WantedBy=lock.target
 
-Specifying `PartOf=lock.target` indicates to systemd that this service should
-be stopped if `lock.target` is stopped. This is even more important for
-services that _aren't_ the screen locker, since this setting means they'll get
-stopped when the system is unlocked.
+`PartOf=lock.target`: Use this for services that must stop the moment you unlock your screen, such as a "Do Not Disturb" mode or a script that pauses background syncs while you are away.
 
-Specifying `WantedBy=lock.target` will have this service run when locking
-**or** sleeping the system.
+`PartOf=sleep.target`: Use this for services that must stop exactly when the system resumes, ensuring that "waking up" cleanup scripts (like ExecStop) fire the moment the hardware resumes.
 
-Specifying `WantedBy=sleep.target` will have this service run only when
-sleeping the system. Note that the service will continue running after
-waking up from sleep.
+`WantedBy=lock.target`: Use this for services that should start whenever the session becomes "In-Active" (the screen locks), such as darkening keyboard LEDs or pausing media players.
+
+`WantedBy=sleep.target`: Use this for services that should only trigger during the transition to suspend, such as disabling a power-hungry peripheral or saving system state just before the kernel pauses.
+
+Automatic Cleanup: Unlike standard user targets, `sleep.target` is explicitly stopped by the handler upon resume. Services tied to it will run their `ExecStop` as soon as the system is resumed.
 
 ## Locking
 
@@ -137,7 +135,16 @@ This will happen _before_ the system is suspended.
 
 ## Detection Toggling
 
-Be default, detection for all events (sleep, lock, and unlock) is enabled. This detection can be toggled individually via flags (-sleep, -lock, -unlock). These flags need to be added to the service file at /usr/lib/systemd/user/systemd-lock-handler.service. Example of lock and unlock detection turned off:
+Be default, detection for all events (sleep, lock, and unlock) is enabled. This detection can be toggled individually via flags. These flags need to be added to the service file at `/usr/lib/systemd/user/systemd-lock-handler.service`.
+
+| Flags | Function | Default |
+| :--- | :----: | :----: |
+| sleep | Suspend/resume detection (sleep.target) | true |
+| lock | Lock detection (lock.target) | true |
+| unlock | Unlock detection (unlock.target) | true |
+| block-sleep-lock | Filter out lock/unlock events caused by suspend/resume | false |
+
+Example of lock and unlock detection turned off:
 
 ```
 [Service]
@@ -153,7 +160,3 @@ systemctl --user restart systemd-lock-handler
 
 The detection status for all three events is shown in the service status (```systemctl --user status systemd-lock-handler```):
 ![alt text](image.png)
-
-
-
-

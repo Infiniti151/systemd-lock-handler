@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/user"
-	"flag"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/go-systemd/v22/daemon"
@@ -15,6 +16,8 @@ import (
 )
 
 var lastTriggerTime time.Time
+var isSleeping atomic.Int32
+
 const cooldown = 2 * time.Second
 
 func info(message string, args ...interface{}) {
@@ -23,8 +26,8 @@ func info(message string, args ...interface{}) {
 }
 
 func warn(message string, args ...interface{}) {
-    msg := fmt.Sprintf(message, args...)
-    fmt.Fprintf(os.Stdout, "<4>[!] %s\n", msg)
+	msg := fmt.Sprintf(message, args...)
+	fmt.Fprintf(os.Stdout, "<4>[!] %s\n", msg)
 }
 
 func errorLog(message string, args ...interface{}) {
@@ -33,120 +36,140 @@ func errorLog(message string, args ...interface{}) {
 }
 
 func fatal(message string, args ...interface{}) {
-    errorLog(message, args...)
-    os.Exit(1)
+	errorLog(message, args...)
+	os.Exit(1)
 }
 
 func SafeTrigger(target string) error {
-    if !lastTriggerTime.IsZero() && time.Since(lastTriggerTime) < cooldown {
-        info("Debouncing: %s suppressed (too soon after last event)", target)
-        return nil
-    }
-    
-    lastTriggerTime = time.Now()
-    return StartSystemdUserUnit(target)
+	if !lastTriggerTime.IsZero() && time.Since(lastTriggerTime) < cooldown {
+		info("Debouncing: %s suppressed (too soon after last event)", target)
+		return nil
+	}
+
+	lastTriggerTime = time.Now()
+	return StartSystemdUserUnit(target)
 }
 
 func StartSystemdUserUnit(unitName string) error {
-    conn, err := systemd.NewUserConnectionContext(context.Background())
-    if err != nil {
-        return fmt.Errorf("failed to connect to systemd user session: %v", err)
-    }
-    defer conn.Close()
+	conn, err := systemd.NewUserConnectionContext(context.Background())
+	if err != nil {
+		return fmt.Errorf("D-Bus connection failed: %v", err)
+	}
+	defer conn.Close()
 
-    ch := make(chan string, 1)
+	ch := make(chan string, 1)
 
-    _, err = conn.StartUnitContext(context.Background(), unitName, "replace", ch)
-    if err != nil {
-        return fmt.Errorf("failed to start unit: %v", err)
-    }
+	_, err = conn.StartUnitContext(context.Background(), unitName, "replace", ch)
+	if err != nil {
+		return fmt.Errorf("failed to start %s: %v", unitName, err)
+	}
 
-    result := <-ch
-    if result == "done" {
-        info("Started systemd unit: %s", unitName)
-        return nil
-    } 
-    
-    return fmt.Errorf("failed to start unit %s: %v", unitName, result)
+	result := <-ch
+	if result == "done" {
+		info("Started systemd unit: %s", unitName)
+		return nil
+	}
+
+	return fmt.Errorf("failed to start unit %s: %v", unitName, result)
 }
 
-func ListenForSleep() {
-    conn, err := dbus.ConnectSystemBus()
-    if err != nil {
-        fatal("Could not connect to the system D-Bus: %v", err)
-    }
+func StopSystemdUserUnit(unitName string) error {
+	conn, err := systemd.NewUserConnectionContext(context.Background())
+	if err != nil {
+		return fmt.Errorf("D-Bus connection failed: %v", err)
+	}
+	defer conn.Close()
 
-    err = conn.AddMatchSignal(
-        dbus.WithMatchObjectPath("/org/freedesktop/login1"),
-        dbus.WithMatchInterface("org.freedesktop.login1.Manager"),
-        dbus.WithMatchMember("PrepareForSleep"),
-    )
-    if err != nil {
-        fatal("Failed to listen for sleep signals: %v", err)
-    }
+	ch := make(chan string, 1)
+	_, err = conn.StopUnitContext(context.Background(), unitName, "replace", ch)
+	if err != nil {
+		return fmt.Errorf("failed to stop %s: %v", unitName, err)
+	}
 
-    c := make(chan *dbus.Signal, 10)
-    logind, err := login1.New()
-    if err != nil {
-        fatal("Failed to connect to logind: %v", err)
-    }
+	result := <-ch
+	if result == "done" {
+		return nil
+	}
+	return fmt.Errorf("failed to stop unit %s: %v", unitName, result)
+}
 
-    go func() {
-        for {
-            // We need to inhibit sleeping so we have time to execute our actions before the system sleeps.
-            lock, err := logind.Inhibit("sleep", "systemd-lock-handler", "Start pre-sleep target", "delay")
-            if err != nil {
-                fatal("Failed to grab sleep inhibitor lock: %v", err)
-            }
-            info("Got lock on sleep inhibitor")
+func ListenForSleep(triggerUnit bool) {
+	conn, err := dbus.ConnectSystemBus()
+	if err != nil {
+		fatal("Could not connect to the system D-Bus: %v", err)
+	}
 
-            if err := waitPrepareForSleep(c, true); err != nil {
-                fatal("Before releasing inhibitor lock: %v", err)
-            }
+	// Match signal for PrepareForSleep
+	err = conn.AddMatchSignal(
+		dbus.WithMatchObjectPath("/org/freedesktop/login1"),
+		dbus.WithMatchInterface("org.freedesktop.login1.Manager"),
+		dbus.WithMatchMember("PrepareForSleep"),
+	)
+	if err != nil {
+		fatal("Failed to listen for sleep signals: %v", err)
+	}
 
-            info("Action: Triggering sleep.target")
+	c := make(chan *dbus.Signal, 10)
+	conn.Signal(c)
+	logind, _ := login1.New()
 
-            if err = SafeTrigger("sleep.target"); err != nil {
-                errorLog("Error starting sleep.target: %v", err)
-            }
-            
-            // Uninhibit sleeping. I.e.: let the system actually go to sleep.
-            if err := lock.Close(); err != nil {
-                fatal("Error releasing inhibitor lock: %v", err)
-            }
+	go func() {
+		for {
+			lock, _ := logind.Inhibit("sleep", "systemd-lock-handler", "Filter lock events", "delay")
 
-            if err := waitPrepareForSleep(c, false); err != nil {
-                fatal("After releasing inhibitor lock: %v", err)
-            }
+			if err := waitPrepareForSleep(c, true); err != nil {
+				return
+			}
 
-            info("The system is now proceeding to sleep")
-        }
-    }()
+			isSleeping.Store(1)
 
-    conn.Signal(c)
+			if triggerUnit {
+				info("Action: Triggering sleep.target")
+				SafeTrigger("sleep.target")
+			}
+
+			lock.Close()
+
+			if err := waitPrepareForSleep(c, false); err != nil {
+				return
+			}
+
+			if triggerUnit {
+				info("Action: Stopping sleep.target")
+				StopSystemdUserUnit("sleep.target")
+			}
+
+			info("System resumed.")
+
+			time.AfterFunc(1200*time.Millisecond, func() {
+				isSleeping.Store(0)
+				info("Internal state: READY")
+			})
+		}
+	}()
 }
 
 func waitPrepareForSleep(c <-chan *dbus.Signal, want bool) error {
-    for s := range c {
-        if len(s.Body) == 0 {
-            return fmt.Errorf("empty signal arguments: %v", s)
-        }
+	for s := range c {
+		if len(s.Body) == 0 {
+			return fmt.Errorf("empty signal arguments: %v", s)
+		}
 
-        got, ok := s.Body[0].(bool)
-        if !ok {
-            return fmt.Errorf("active argument not a bool: %v", s.Body[0])
-        }
+		got, ok := s.Body[0].(bool)
+		if !ok {
+			return fmt.Errorf("active argument not a bool: %v", s.Body[0])
+		}
 
-        if got == want {
-            return nil
-        }
+		if got == want {
+			return nil
+		}
 
-        warn("Received PrepareForSleep(%v) but waiting for %v. Skipping...", got, want)
-    }
-    return fmt.Errorf("signal channel closed")
+		warn("Received PrepareForSleep(%v) but waiting for %v. Skipping...", got, want)
+	}
+	return fmt.Errorf("signal channel closed")
 }
 
-func StartUnifiedMonitor(u *user.User, sessionPath dbus.ObjectPath, doLock bool, doUnlock bool) {
+func StartUnifiedMonitor(sessionPath dbus.ObjectPath, doLock bool, doUnlock bool, blockSleepLock bool) {
 	go func() {
 		conn, err := dbus.ConnectSystemBus()
 		if err != nil {
@@ -187,6 +210,11 @@ func StartUnifiedMonitor(u *user.User, sessionPath dbus.ObjectPath, doLock bool,
 
 			if variant, exists := props["LockedHint"]; exists {
 				isLocked, ok := variant.Value().(bool)
+				if blockSleepLock && isSleeping.Load() == 1 {
+					info("Ignoring LockedHint change (System is in Sleep/Resume transition)")
+					continue
+				}
+
 				if !ok || isLocked == lastLocked {
 					continue
 				}
@@ -263,61 +291,69 @@ func GetActiveGraphicalSession(u *user.User) dbus.ObjectPath {
 }
 
 func main() {
-    handleSleep := flag.Bool("sleep", true, "Enable detection of PrepareForSleep signals")
-    handleLock := flag.Bool("lock", true, "Enable detection of Lock signals")
-    handleUnlock := flag.Bool("unlock", true, "Enable detection of Unlock signals")
+	handleSleep := flag.Bool("sleep", true, "Suspend/resume detection (sleep.target)")
+	handleLock := flag.Bool("lock", true, "Lock detection (lock.target)")
+	handleUnlock := flag.Bool("unlock", true, "Unlock detection (unlock.target)")
+	blockSleepLock := flag.Bool("block-sleep-lock", false, "Filter out lock/unlock events caused by suspend/resume")
 
-    flag.Usage = func() {
-        fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-        fmt.Fprintf(os.Stderr, "Listens for logind events to trigger systemd user targets.\n\n")
-        fmt.Fprintln(os.Stderr, "Options:")
-        flag.PrintDefaults()
-    }
-    flag.Parse()
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Listens for logind events to trigger systemd user targets.\n\n")
+		fmt.Fprintln(os.Stderr, "Options:")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
 
-    configs := []struct {
-        name    string
-        enabled bool
-    }{
-        {"Sleep detection", *handleSleep},
-        {"Lock detection", *handleLock},
-        {"Unlock detection", *handleUnlock},
-    }
+	configs := []struct {
+		name         string
+		current      bool
+		defaultValue bool
+	}{
+		{"Sleep detection", *handleSleep, true},
+		{"Lock detection", *handleLock, true},
+		{"Unlock detection", *handleUnlock, true},
+		{"Sleep-lock filtering", *blockSleepLock, false},
+	}
 
-    for _, cfg := range configs {
-        if !cfg.enabled {
-            warn("%s is disabled by flag.", cfg.name)
-        } else {
-            info("%s is enabled.", cfg.name)
-        }
-    }
+	for _, cfg := range configs {
+		status := "disabled"
+		if cfg.current {
+			status = "enabled"
+		}
 
-    currUser, err := user.Current()
-    if err != nil {
-        fatal("Failed to get username: %v", err)
-    }
+		if cfg.current != cfg.defaultValue {
+			warn("%s is %s (Non-default).", cfg.name, status)
+		} else {
+			info("%s is %s.", cfg.name, status)
+		}
+	}
 
-    sessionPath := GetActiveGraphicalSession(currUser)
-    if sessionPath == "" {
-        fatal("No active graphical session found for user %s", currUser.Username)
-    }
+	currUser, err := user.Current()
+	if err != nil {
+		fatal("Failed to get username: %v", err)
+	}
 
-    if *handleSleep {
-        ListenForSleep()
-    }
+	sessionPath := GetActiveGraphicalSession(currUser)
+	if sessionPath == "" {
+		fatal("No active graphical session found for user %s", currUser.Username)
+	}
 
-    if *handleLock || *handleUnlock {
-        StartUnifiedMonitor(currUser, sessionPath, *handleLock, *handleUnlock)
-    }
+	if *handleSleep || *blockSleepLock {
+		ListenForSleep(*handleSleep)
+	}
 
-    info("Initialization complete. Running for user: %s", currUser.Username)
+	if *handleLock || *handleUnlock {
+		StartUnifiedMonitor(sessionPath, *handleLock, *handleUnlock, *blockSleepLock)
+	}
 
-    sent, err := daemon.SdNotify(true, daemon.SdNotifyReady)
-    if err != nil {
-        errorLog("Error calling sd_notify: %v", err)
-    } else if !sent {
-        warn("Note: sd_notify not sent (likely not running under systemd Type=notify)")
-    }
+	info("Initialization complete. Running for user: %s", currUser.Username)
 
-    select {}
+	sent, err := daemon.SdNotify(true, daemon.SdNotifyReady)
+	if err != nil {
+		errorLog("Error calling sd_notify: %v", err)
+	} else if !sent {
+		warn("Note: sd_notify not sent (likely not running under systemd Type=notify)")
+	}
+
+	select {}
 }

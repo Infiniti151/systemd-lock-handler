@@ -1,4 +1,4 @@
 [Unit]
-Description=User-level target triggered when the system is about to sleep.
-Requires=lock.target
-After=lock.target
+Description=User-level suspend
+DefaultDependencies=no
+StopWhenUnneeded=yes
