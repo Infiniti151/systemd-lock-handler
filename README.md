@@ -137,7 +137,7 @@ This will happen _before_ the system is suspended.
 
 ## Detection Toggling
 
-Be default, detection for all events (sleep, lock, and unlock) is enabled. This detection can be toggled individually via flags. These flags need to be added to the service file at `/usr/lib/systemd/user/systemd-lock-handler.service`.
+Be default, detection for all events (sleep, lock, and unlock) is enabled. This detection can be toggled individually via flags. These flags need to be added using a systemd drop-in file.
 
 | Flags | Function | Default |
 | :--- | :----: | :----: |
@@ -146,15 +146,16 @@ Be default, detection for all events (sleep, lock, and unlock) is enabled. This 
 | unlock | Unlock detection (unlock.target) | true |
 | block-sleep-lock | Filter out lock/unlock events caused by suspend/resume | false |
 
-Example of lock and unlock detection turned off:
+**Example of lock and unlock detection turned off:**
 
+Add flags using `systemctl --user edit systemd-lock-handler.service`
 ```
 [Service]
-Slice=session.slice
+ExecStart=
 ExecStart=/usr/bin/systemd-lock-handler -lock=false -unlock=false
 ```
 
-After adding the flags, reload the daemon and restart the service:
+Reload the daemon and restart the service:
 ```
 systemctl --user daemon-reload
 systemctl --user restart systemd-lock-handler
