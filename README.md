@@ -105,6 +105,8 @@ locks the session and before the system goes to sleep:
 
 `WantedBy=lock.target`: Use this for services that should start whenever the session becomes "In-Active" (the screen locks), such as darkening keyboard LEDs or pausing media players.
 
+`WantedBy=unlock.target`: Use this for services that should start automatically the moment you unlock your screen, such as a script that re-enables your dGPU, refreshes your mail, or resumes background notifications.
+
 `WantedBy=sleep.target`: Use this for services that should only trigger during the transition to suspend, such as disabling a power-hungry peripheral or saving system state just before the kernel pauses.
 
 Automatic Cleanup: Unlike standard user targets, `sleep.target` is explicitly stopped by the handler upon resume. Services tied to it will run their `ExecStop` as soon as the system is resumed.
