@@ -21,7 +21,7 @@ srpm:
 	\
 	mkdir -p $(TOP_DIR)/out; \
 	curl -sL "https://go.dev/dl/$$LATEST_GO.linux-amd64.tar.gz" -o $(TOP_DIR)/out/go-amd64.tar.gz || { echo "Go amd64 download failed!"; exit 1; }; \
-	curl -sL "https://go.dev/dl/$$LATEST_GO.linux-arm64.tar.gz" -o $(TOP_DIR)/out/go-arm64.tar.gz || { echo "Go arm64 download failed!"; exit 1; }; \ 
+	curl -sL "https://go.dev/dl/$$LATEST_GO.linux-arm64.tar.gz" -o $(TOP_DIR)/out/go-arm64.tar.gz || { echo "Go arm64 download failed!"; exit 1; }; \
 	\
 	echo "=== Downloaded Go binaries ==="; \
     cd $(TOP_DIR) && $(MAKE) stage VERSION=$$VERSION; \
