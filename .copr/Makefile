@@ -4,7 +4,7 @@ TOP_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/..
 
 srpm:
 	if [ -n "$(outdir)" ]; then \
-		dnf install -y git go-rpm-macros rpmautospec; \
+		dnf install -y git go-rpm-macros rpmautospec python3-rpmautospec+{click,pygit2}; \
 	fi
 
 	cd $(TOP_DIR) && git fetch --tags --unshallow 2>/dev/null || cd $(TOP_DIR) && git fetch --tags
