@@ -17,7 +17,6 @@ srpm:
 	\
     echo "=== Project Root: $(TOP_DIR) ==="; \
     echo "=== Building Version: $$VERSION ==="; \
-    echo "=== Detected Arch: $(ARCH) -> Go Arch: $(GO_ARCH) ==="; \
     echo "=== Target Go: $$LATEST_GO ==="; \
 	\
 	mkdir -p $(TOP_DIR)/out; \
