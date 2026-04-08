@@ -6,8 +6,8 @@ VERSION := $(if $(VERSION),$(VERSION),6)
 TOP_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/..
 
 srpm:
-	if [ -n "$(outdir)" ]; then
-		dnf install -y git curl go-rpm-macros;
+	if [ -n "$(outdir)" ]; then \
+		dnf install -y git curl go-rpm-macros; \
 	fi
 
 	$(eval LATEST_GO := $(shell curl -s https://go.dev/VERSION?m=text | head -n1))
