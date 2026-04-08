@@ -8,6 +8,8 @@ URL:            https://github.com/Infiniti151/systemd-lock-handler
 Source0:        systemd-lock-handler.tar.gz
 BuildRequires:  golang
 BuildRequires:  systemd-rpm-macros
+BuildRequires:  tree-sitter-srpm-macros
+BuildRequires:  go-rpm-macros
 
 %description
 A systemd user service to handle lock/unlock events.

@@ -4,7 +4,9 @@ VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
 VERSION := $(if $(VERSION),$(VERSION),6)
 
 srpm:
-	if [ -n "$(outdir)" ]; then dnf install -y rpm-build golang git; fi
+	if [ -n "$(outdir)" ]; then \
+		dnf install -y rpm-build golang git tree-sitter-srpm-macros go-rpm-macros; \
+	fi
 	
 	make -C .. stage VERSION=$(VERSION)
 	mkdir -p ../out
