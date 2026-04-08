@@ -36,23 +36,24 @@ srpm:
         --exclude=out --exclude=.git --exclude=.github --exclude=*.png \
         --exclude=README.md --exclude=.gitignore -C $(TOP_DIR) .; \
     \
+    echo "=== Running rpmbuild with version $$VERSION ==="; \
     cd $(TOP_DIR) && rpmbuild -bs \
         --define "_sourcedir $$(pwd)/out" \
         --define "_srcrpmdir $(if $(outdir),$(outdir),$$(pwd)/out)" \
         --define "version $$VERSION" \
-		--define "_version $$VERSION" \
-        systemd-lock-handler.spec
-		&& \
+        --define "_version $$VERSION" \
+        systemd-lock-handler.spec && \
     echo "=== SRPM built successfully with version $$VERSION ===" || \
-    { echo "ERROR: rpmbuild failed!"; exit 1; } \
+    { echo "ERROR: rpmbuild failed!"; exit 1; }
 	\
-    if [ -n "$(outdir)" ]; then \
+	if [ -n "$(outdir)" ]; then \
         SRPM=$$(ls $(outdir)/systemd-lock-handler-*.src.rpm 2>/dev/null | head -n1); \
         if [ -n "$$SRPM" ]; then \
             echo "Generated SRPM: $$(basename $$SRPM)"; \
-            if ! echo "$$SRPM" | grep -q "systemd-lock-handler-$$VERSION-"; then \
+			if ! echo "$$SRPM" | grep -q "systemd-lock-handler-$$VERSION-"; then \
                 echo "WARNING: Version mismatch detected in SRPM!"; \
             fi; \
+        else \
+            echo "WARNING: No SRPM found in $(outdir)"; \
         fi; \
     fi
-
