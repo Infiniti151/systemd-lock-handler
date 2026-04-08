@@ -16,7 +16,9 @@ srpm:
 		dnf install -y git go-rpm-macros rpmautospec python3-rpmautospec+{click,pygit2}; \
 	fi; \
 	\
-	cd $(TOP_DIR) && (git fetch --tags --unshallow 2>/dev/null || git fetch --tags); \
+	cd $(TOP_DIR) && \
+	git config --global --add safe.directory "$$(pwd)" && \
+	(git fetch --tags --unshallow 2>/dev/null || git fetch --tags); \
 	V_TAG=$$(cd $(TOP_DIR) && git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'); \
 	VERSION=$${V_TAG:-6}; \
 	LATEST_GO=$$(curl -s https://go.dev/VERSION?m=text | head -n1); \
