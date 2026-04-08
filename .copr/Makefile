@@ -24,14 +24,11 @@ srpm:
     echo "Detected Arch: $(ARCH) -> Go Arch: $(GO_ARCH)"; \
     echo "Target Go: $$LATEST_GO"; \
 	\
-	curl -sL "$$GO_URL" -o /tmp/go.tar.gz || { echo "Go download failed!"; exit 1; }; \
-    mkdir -p /tmp/go-home; \
-    tar -C /tmp/go-home -xzf /tmp/go.tar.gz; \
-	\
-    cd $(TOP_DIR) && PATH=/tmp/go-home/go/bin:$$PATH GOTOOLCHAIN=local \
-		$(MAKE) stage VERSION=$$VERSION; \
-	\
 	mkdir -p $(TOP_DIR)/out; \
+	curl -sL "$$GO_URL" -o $(TOP_DIR)/out/go-toolchain.tar.gz; \ || { echo "Go download failed!"; exit 1; }; \
+	\
+    cd $(TOP_DIR) && $(MAKE) stage VERSION=$$VERSION; \
+	\
     tar -czf $(TOP_DIR)/out/systemd-lock-handler.tar.gz \
         --exclude=out --exclude=.git --exclude=.github --exclude=*.png \
         --exclude=README.md --exclude=.gitignore -C $(TOP_DIR) .; \

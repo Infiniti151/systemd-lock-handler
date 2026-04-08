@@ -6,6 +6,7 @@ Summary:        Systemd user service for lock/unlock events
 License:        ISC
 URL:            https://github.com/Infiniti151/systemd-lock-handler
 Source0:        systemd-lock-handler.tar.gz
+Source1:        go-toolchain.tar.gz
 BuildRequires:  systemd-rpm-macros
 BuildRequires:  go-rpm-macros
 BuildRequires:  compiler(go-compiler)
@@ -15,23 +16,29 @@ A systemd user service to handle lock/unlock events.
 
 %prep
 %setup -q -c -T
-tar -xf %{SOURCE0}
+
+tar -xf %{SOURCE0} --strip-components=1
+
+mkdir -p ./go-home
+tar -C ./go-home -xf %{SOURCE1}
 
 %build
-if [ ! -x "%{custom_go_path}/go" ]; then
-    echo "Error: Custom Go binary not found at %{custom_go_path}/go"
+GO_BIN=$(pwd)/go-home/go/bin/go
+
+if [ ! -x "$GO_BIN" ]; then
+    echo "ERROR: Custom Go compiler not found at $GO_BIN"
     exit 1
 fi
 
-export PATH=%{custom_go_path}:/usr/bin:/bin
-export GOTOOLCHAIN=local
+$GO_BIN version
 
-go build -ldflags '-s -w' -o systemd-lock-handler main.go
+export GOTOOLCHAIN=local
+$GO_BIN build -ldflags '-s -w' -o systemd-lock-handler main.go
 
 %check
-export PATH=%{custom_go_path}:/usr/bin:/bin
+GO_BIN=$(pwd)/go-home/go/bin/go
 export GOTOOLCHAIN=local
-go test -v ./...
+$GO_BIN test -v ./...
 
 %install
 mkdir -p %{buildroot}%{_bindir}
