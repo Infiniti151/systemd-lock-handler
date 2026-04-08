@@ -28,8 +28,8 @@ srpm:
 	rpmautospec process-distgit \
 		$(TOP_DIR)/systemd-lock-handler.temp.spec \
 		$(TOP_DIR)/systemd-lock-handler.spec.processed
-
-    rm $(TOP_DIR)/systemd-lock-handler.temp.spec
+	
+	rm $(TOP_DIR)/systemd-lock-handler.temp.spec
 
 	PATH=/tmp/go-home/go/bin:$(PATH) $(MAKE) -C $(TOP_DIR) stage VERSION=$(VERSION)
 	
