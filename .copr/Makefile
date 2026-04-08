@@ -14,7 +14,7 @@ srpm:
     (git fetch --tags --unshallow 2>/dev/null || true); \
     \
     V_TAG=$$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'); \
-    VERSION=$${V_TAG:-7}; \
+    VERSION=$${V_TAG:-6}; \
     \
     LATEST_GO=$$(curl -s https://go.dev/VERSION?m=text | head -n1); \
     GO_URL="https://go.dev/dl/$${LATEST_GO}.linux-$(GO_ARCH).tar.gz"; \
@@ -40,4 +40,19 @@ srpm:
         --define "_sourcedir $$(pwd)/out" \
         --define "_srcrpmdir $(if $(outdir),$(outdir),$$(pwd)/out)" \
         --define "version $$VERSION" \
+		--define "_version $$VERSION" \
         systemd-lock-handler.spec
+		&& \
+    echo "=== SRPM built successfully with version $$VERSION ===" || \
+    { echo "ERROR: rpmbuild failed!"; exit 1; } \
+	\
+    if [ -n "$(outdir)" ]; then \
+        SRPM=$$(ls $(outdir)/systemd-lock-handler-*.src.rpm 2>/dev/null | head -n1); \
+        if [ -n "$$SRPM" ]; then \
+            echo "Generated SRPM: $$(basename $$SRPM)"; \
+            if ! echo "$$SRPM" | grep -q "systemd-lock-handler-$$VERSION-"; then \
+                echo "WARNING: Version mismatch detected in SRPM!"; \
+            fi; \
+        fi; \
+    fi
+
