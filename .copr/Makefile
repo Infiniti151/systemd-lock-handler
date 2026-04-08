@@ -3,9 +3,9 @@
 TOP_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/..
 
 ARCH := $(shell uname -m)
-ifeq ($(UNAME_M),x86_64)
+ifeq ($(ARCH),x86_64)
 	GO_ARCH := amd64
-else ifeq ($(UNAME_M),aarch64)
+else ifeq ($(ARCH),aarch64)
 	GO_ARCH := arm64
 else
 	GO_ARCH := amd64
