@@ -42,6 +42,7 @@ srpm:
 	cd $(TOP_DIR) && rpmbuild -bs \
         --define "_sourcedir $$(pwd)/out" \
         --define "_srcrpmdir $(if $(outdir),$(outdir),$$(pwd)/out)" \
+		--define "custom_go_path /tmp/go-home/go/bin" \
         $(TOP_DIR)/systemd-lock-handler.spec && \
 	echo "=== SUCCESS: SRPM built with version $$VERSION ===" || \
 	{ echo "ERROR: rpmbuild failed"; exit 1; }; \

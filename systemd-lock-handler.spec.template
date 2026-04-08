@@ -18,12 +18,18 @@ A systemd user service to handle lock/unlock events.
 tar -xf %{SOURCE0}
 
 %build
-export PATH="/tmp/go-home/go/bin:${PATH}"
+if [ ! -x "%{custom_go_path}/go" ]; then
+    echo "Error: Custom Go binary not found at %{custom_go_path}/go"
+    exit 1
+fi
+
+export PATH=%{custom_go_path}:/usr/bin:/bin
 export GOTOOLCHAIN=local
+
 go build -ldflags '-s -w' -o systemd-lock-handler main.go
 
 %check
-export PATH="/tmp/go-home/go/bin:${PATH}"
+export PATH=%{custom_go_path}:/usr/bin:/bin
 export GOTOOLCHAIN=local
 go test -v ./...
 
