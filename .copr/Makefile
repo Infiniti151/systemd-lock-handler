@@ -23,8 +23,8 @@ srpm:
 	echo "Building Version: $$VERSION"; \
 	echo "Detected Arch: $(ARCH) -> Using Go Arch: $(GO_ARCH)"; \
 	\
-	sed "s/^\(Version:\)\s*.*/\1 $$VERSION/" $(TOP_DIR)/systemd-lock-handler.spec > $(TOP_DIR)/systemd-lock-handler.temp.spec; \
-	\
+	sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" \
+		$(TOP_DIR)/systemd-lock-handler.spec > $(TOP_DIR)/systemd-lock-handler.temp.spec; \
 	echo "Installing $$LATEST_GO..."; \
 	curl -sL https://go.dev/dl/$$LATEST_GO.linux-$(GO_ARCH).tar.gz -o /tmp/go.tar.gz; \
 	mkdir -p /tmp/go-home; \
