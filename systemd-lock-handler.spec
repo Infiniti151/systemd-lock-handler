@@ -1,6 +1,6 @@
 
 Name:           systemd-lock-handler
-Version:        %{?version}%{!?version:6}
+Version:        0.0.0
 Release:        %autorelease
 Summary:        Systemd user service for lock/unlock events
 License:        ISC
@@ -18,11 +18,13 @@ A systemd user service to handle lock/unlock events.
 tar -xf %{SOURCE0}
 
 %build
-export PATH="/tmp/go-home/go/bin:$PATH"
+export PATH="/tmp/go-home/go/bin:${PATH}"
+export GOTOOLCHAIN=local
 go build -ldflags '-s -w' -o systemd-lock-handler main.go
 
 %check
-export PATH="/tmp/go-home/go/bin:$PATH"
+export PATH="/tmp/go-home/go/bin:${PATH}"
+export GOTOOLCHAIN=local
 go test -v ./...
 
 %install
