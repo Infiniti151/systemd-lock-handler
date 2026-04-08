@@ -17,20 +17,25 @@ A systemd user service to handle lock/unlock events.
 
 %prep
 %setup -q -c -T
+echo "=*=*=*> Running Prep Phase <*=*=*="
 
 tar -xf %{SOURCE0} --strip-components=1
+echo "=== Extracted Source Tarball ==="
 
 mkdir -p ./go-home
 
 %ifarch x86_64
 tar -C ./go-home -xf %{SOURCE1}
+echo "=== Extracted Go (amd64) Tarball ==="
 %endif
 
 %ifarch aarch64
 tar -C ./go-home -xf %{SOURCE2}
+echo "=== Extracted Go (arm64) Tarball ==="
 %endif
 
 %build
+echo "=*=*=*> Running Build Phase <*=*=*="
 GO_BIN=$(pwd)/go-home/go/bin/go
 
 if [ ! -x "$GO_BIN" ]; then
@@ -38,24 +43,51 @@ if [ ! -x "$GO_BIN" ]; then
     exit 1
 fi
 
-$GO_BIN version
+echo "=== Go version: $($GO_BIN version) ==="
 
 export GOTOOLCHAIN=local
 export CGO_ENABLED=1
 
+echo "=== Building systemd-lock-handler ==="
+
 $GO_BIN build -ldflags '-s -w' -o systemd-lock-handler main.go
 
 %check
+echo "=*=*=*> Running Check Phase <*=*=*="
 GO_BIN=$(pwd)/go-home/go/bin/go
 export GOTOOLCHAIN=local
-$GO_BIN test -v ./...
+
+echo "=== Package List ==="
+$GO_BIN list .
+
+echo "=== Running Tests ==="
+$GO_BIN test -v .
 
 %install
+echo "=*=*=*> Running Install Phase <*=*=*="
+echo "Working directory: $(pwd)"
+echo "Buildroot: %{buildroot}"
+
+if [ ! -f systemd-lock-handler ]; then
+    echo "ERROR: Binary 'systemd-lock-handler' not found in $(pwd)!"
+    ls -lh
+    exit 1
+fi
+
 mkdir -p %{buildroot}%{_bindir}
 mkdir -p %{buildroot}%{_userunitdir}
+
+echo "=== Installing binary to %{buildroot}%{_bindir}/ ==="
 install -m 755 systemd-lock-handler %{buildroot}%{_bindir}/
+
+echo "=== Installing systemd units to %{buildroot}%{_userunitdir}/ ==="
 install -m 644 dist/systemd-lock-handler.service.ready %{buildroot}%{_userunitdir}/systemd-lock-handler.service
 install -m 644 dist/*.target %{buildroot}%{_userunitdir}/
+
+echo "=== Final Buildroot Contents ==="
+find %{buildroot} -maxdepth 4 -not -path '*/.*'
+
+echo "=*=*=*> Finished Install Phase - Moving to File Manifest <*=*=*="
 
 %files
 %license LICENCE
