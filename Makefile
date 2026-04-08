@@ -1,5 +1,5 @@
 NAME = systemd-lock-handler
-VERSION = 1
+VERSION ?= 1
 LICENSE = ISC
 MAINTAINER = Infiniti151
 URL = https://github.com/Infiniti151/systemd-lock-handler
