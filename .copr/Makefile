@@ -25,7 +25,8 @@ srpm:
     echo "Target Go: $$LATEST_GO"; \
 	\
 	mkdir -p $(TOP_DIR)/out; \
-	curl -sL "$$GO_URL" -o $(TOP_DIR)/out/go-toolchain.tar.gz; \ || { echo "Go download failed!"; exit 1; }; \
+	curl -sL "$$GO_URL" -o $(TOP_DIR)/out/go-toolchain.tar.gz || \
+	{ echo "Go download failed!"; exit 1; }; \
 	\
     cd $(TOP_DIR) && $(MAKE) stage VERSION=$$VERSION; \
 	\
