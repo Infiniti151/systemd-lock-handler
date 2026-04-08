@@ -2,6 +2,15 @@
 
 TOP_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/..
 
+ARCH := $(shell uname -m)
+ifeq ($(UNAME_M),x86_64)
+	GO_ARCH := amd64
+else ifeq ($(UNAME_M),aarch64)
+	GO_ARCH := arm64
+else
+	GO_ARCH := amd64
+endif
+
 srpm:
 	if [ -n "$(outdir)" ]; then \
 		dnf install -y git go-rpm-macros rpmautospec python3-rpmautospec+{click,pygit2}; \
@@ -18,7 +27,7 @@ srpm:
 	$(eval LATEST_GO := $(shell curl -s https://go.dev/VERSION?m=text | head -n1))
 
 	@echo "Installing $(LATEST_GO)..."
-	curl -sL https://go.dev/dl/$(LATEST_GO).linux-amd64.tar.gz -o /tmp/go.tar.gz
+	curl -sL https://go.dev/dl/$(LATEST_GO).linux-${GO_ARCH}.tar.gz -o /tmp/go.tar.gz
 	mkdir -p /tmp/go-home
 	tar -C /tmp/go-home -xzf /tmp/go.tar.gz
 
