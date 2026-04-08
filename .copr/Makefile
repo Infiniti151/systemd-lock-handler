@@ -12,12 +12,10 @@ else
 endif
 
 srpm:
-	# 1. Install dependencies
 	if [ -n "$(outdir)" ]; then \
 		dnf install -y git go-rpm-macros rpmautospec python3-rpmautospec+{click,pygit2}; \
 	fi; \
 	\
-	# 2. Environment Setup
 	cd $(TOP_DIR) && (git fetch --tags --unshallow 2>/dev/null || git fetch --tags); \
 	V_TAG=$$(cd $(TOP_DIR) && git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'); \
 	VERSION=$${V_TAG:-6}; \
@@ -29,23 +27,18 @@ srpm:
 	echo "Detected Arch: $(ARCH) -> Using Go Arch: $(GO_ARCH)"; \
 	echo "Target Go: $$LATEST_GO"; \
 	\
-	# 3. Spec Manipulation (Local Paths to fix rpmautospec parsing)
 	cd $(TOP_DIR) && sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" systemd-lock-handler.spec > systemd-lock-handler.temp.spec; \
 	\
-	# 4. Go Installation
 	echo "Downloading from $$GO_URL..."; \
 	curl -sL "$$GO_URL" -o /tmp/go.tar.gz; \
 	if [ ! -s /tmp/go.tar.gz ]; then echo "Download failed!"; exit 1; fi; \
 	mkdir -p /tmp/go-home; \
 	tar -C /tmp/go-home -xzf /tmp/go.tar.gz; \
 	\
-	# 5. Process Spec with rpmautospec
 	cd $(TOP_DIR) && rpmautospec process-distgit systemd-lock-handler.temp.spec systemd-lock-handler.spec.processed; \
 	\
-	# 6. Build stage
 	cd $(TOP_DIR) && PATH=/tmp/go-home/go/bin:$$PATH $(MAKE) stage VERSION=$$VERSION; \
 	\
-	# 7. Package and Build SRPM
 	mkdir -p $(TOP_DIR)/out; \
 	tar -czf $(TOP_DIR)/out/systemd-lock-handler.tar.gz \
 		--exclude=out --exclude=.git --exclude=.github --exclude=*.png \
@@ -57,5 +50,4 @@ srpm:
 		--define "_version $$VERSION" \
 		systemd-lock-handler.spec.processed; \
 	\
-	# Clean up
 	rm $(TOP_DIR)/systemd-lock-handler.temp.spec
