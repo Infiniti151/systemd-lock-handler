@@ -16,4 +16,4 @@ systemd-lock-handler
 .secrets
 
 # --- COPR Files ---
-systemd-lock-handler.spec.processed
+systemd-lock-handler.spec

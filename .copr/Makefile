@@ -36,18 +36,16 @@ srpm:
         --exclude=out --exclude=.git --exclude=.github --exclude=*.png \
         --exclude=README.md --exclude=.gitignore -C $(TOP_DIR) .; \
 	\
-	sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" $(TOP_DIR)/systemd-lock-handler.spec > $(TOP_DIR)/systemd-lock-handler.spec.processed; \
+	sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" $(TOP_DIR)/systemd-lock-handler.spec.template > $(TOP_DIR)/systemd-lock-handler.spec; \
 	\
 	echo "=== Running rpmbuild on .spec.processed with version $$VERSION ==="; \
 	cd $(TOP_DIR) && rpmbuild -bs \
         --define "_sourcedir $$(pwd)/out" \
         --define "_srcrpmdir $(if $(outdir),$(outdir),$$(pwd)/out)" \
-        $(TOP_DIR)/systemd-lock-handler.spec.processed && \
+        $(TOP_DIR)/systemd-lock-handler.spec && \
 	echo "=== SUCCESS: SRPM built with version $$VERSION ===" || \
 	{ echo "ERROR: rpmbuild failed"; exit 1; }; \
 	\
 	if [ -n "$(outdir)" ]; then \
         ls -l "$(outdir)"/systemd-lock-handler-*.src.rpm 2>/dev/null || echo "No SRPM found"; \
     fi; \
-	\
-	rm -f $(TOP_DIR)/systemd-lock-handler.spec.processed
