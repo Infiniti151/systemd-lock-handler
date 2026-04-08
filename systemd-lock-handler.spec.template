@@ -6,7 +6,8 @@ Summary:        Systemd user service for lock/unlock events
 License:        ISC
 URL:            https://github.com/Infiniti151/systemd-lock-handler
 Source0:        systemd-lock-handler.tar.gz
-Source1:        go-toolchain.tar.gz
+Source1:        go-amd64.tar.gz
+Source2:        go-arm64.tar.gz
 BuildRequires:  systemd-rpm-macros
 BuildRequires:  go-rpm-macros
 BuildRequires:  compiler(go-compiler)
@@ -20,7 +21,14 @@ A systemd user service to handle lock/unlock events.
 tar -xf %{SOURCE0} --strip-components=1
 
 mkdir -p ./go-home
+
+%ifarch x86_64
 tar -C ./go-home -xf %{SOURCE1}
+%endif
+
+%ifarch aarch64
+tar -C ./go-home -xf %{SOURCE2}
+%endif
 
 %build
 GO_BIN=$(pwd)/go-home/go/bin/go
@@ -33,6 +41,8 @@ fi
 $GO_BIN version
 
 export GOTOOLCHAIN=local
+export CGO_ENABLED=1
+
 $GO_BIN build -ldflags '-s -w' -o systemd-lock-handler main.go
 
 %check

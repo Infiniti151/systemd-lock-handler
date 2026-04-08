@@ -2,9 +2,6 @@
 
 TOP_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/..
 
-ARCH := $(shell uname -m)
-GO_ARCH := $(if $(filter x86_64,$(ARCH)),amd64,$(if $(filter aarch64,$(ARCH)),arm64,amd64))
-
 srpm:
 	if [ -n "$(outdir)" ]; then \
         dnf install -y git go-rpm-macros rpmautospec; \
@@ -17,17 +14,17 @@ srpm:
     VERSION=$${V_TAG:-6}; \
 	\
     LATEST_GO=$$(curl -s https://go.dev/VERSION?m=text | head -n1); \
-    GO_URL="https://go.dev/dl/$${LATEST_GO}.linux-$(GO_ARCH).tar.gz"; \
 	\
-    echo "Project Root: $(TOP_DIR)"; \
-    echo "Building Version: $$VERSION"; \
-    echo "Detected Arch: $(ARCH) -> Go Arch: $(GO_ARCH)"; \
-    echo "Target Go: $$LATEST_GO"; \
+    echo "=== Project Root: $(TOP_DIR) ==="; \
+    echo "=== Building Version: $$VERSION ==="; \
+    echo "=== Detected Arch: $(ARCH) -> Go Arch: $(GO_ARCH) ==="; \
+    echo "=== Target Go: $$LATEST_GO ==="; \
 	\
 	mkdir -p $(TOP_DIR)/out; \
-	curl -sL "$$GO_URL" -o $(TOP_DIR)/out/go-toolchain.tar.gz || \
-	{ echo "Go download failed!"; exit 1; }; \
+	curl -sL "https://go.dev/dl/$$LATEST_GO.linux-amd64.tar.gz" -o $(TOP_DIR)/out/go-amd64.tar.gz || { echo "Go amd64 download failed!"; exit 1; }; \
+	curl -sL "https://go.dev/dl/$$LATEST_GO.linux-arm64.tar.gz" -o $(TOP_DIR)/out/go-arm64.tar.gz || { echo "Go arm64 download failed!"; exit 1; }; \ 
 	\
+	echo "=== Downloaded Go binaries ==="; \
     cd $(TOP_DIR) && $(MAKE) stage VERSION=$$VERSION; \
 	\
     tar -czf $(TOP_DIR)/out/systemd-lock-handler.tar.gz \
@@ -35,12 +32,12 @@ srpm:
         --exclude=README.md --exclude=.gitignore -C $(TOP_DIR) .; \
 	\
 	sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" $(TOP_DIR)/systemd-lock-handler.spec.template > $(TOP_DIR)/systemd-lock-handler.spec; \
+	echo "=== Spec file generated with version $$VERSION ==="; \
 	\
-	echo "=== Running rpmbuild on .spec.processed with version $$VERSION ==="; \
+	echo "=== Running rpmbuild with version $$VERSION ==="; \
 	cd $(TOP_DIR) && rpmbuild -bs \
         --define "_sourcedir $$(pwd)/out" \
         --define "_srcrpmdir $(if $(outdir),$(outdir),$$(pwd)/out)" \
-		--define "custom_go_path /tmp/go-home/go/bin" \
         $(TOP_DIR)/systemd-lock-handler.spec && \
 	echo "=== SUCCESS: SRPM built with version $$VERSION ===" || \
 	{ echo "ERROR: rpmbuild failed"; exit 1; }; \

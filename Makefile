@@ -39,71 +39,71 @@ ${NAME}:
 	go build -ldflags '-s -w' -o ${OUT_DIR}/${NAME}
 
 test:
-	@printf "$(CYAN)--- Running tests... ---$(NC)\n"
+	@printf "$(CYAN)=== Running tests... ===$(NC)\n"
 	go test -v -race ./...
-	@printf "$(GREEN)--- All tests passed. ---$(NC)\n"
+	@printf "$(GREEN)=== All tests passed. ===$(NC)\n"
 
 build: test clean
-	@printf "$(CYAN)---Building ${NAME}... ---$(NC)\n"
+	@printf "$(CYAN)===Building ${NAME}... ===$(NC)\n"
 	@mkdir -p $(OUT_DIR)
 	$(MAKE) ${NAME}
-	@printf "$(GREEN)--- Build successful. ---$(NC)\n"
+	@printf "$(GREEN)=== Build successful. ===$(NC)\n"
 
 stage:
-	@printf "$(CYAN)--- Processing systemd service template... ---$(NC)\n"
+	@printf "$(CYAN)=== Processing systemd service template... ===$(NC)\n"
 	@# Generate a temporary file so we don't overwrite our template source
 	sed "s|{{BIN_PATH}}|$(BIN_PATH)/${NAME}|g" $(DIST_DIR)/${NAME}.service > $(DIST_DIR)/${NAME}.service.ready
-	@printf "$(GREEN)--- Template generated successfully. ---$(NC)\n"
+	@printf "$(GREEN)=== Template generated successfully. ===$(NC)\n"
 
 install: build stage
-	@printf "$(CYAN)--- Installing ${NAME} to $(INSTALL_BIN_DIR) and systemd service files... ---$(NC)\n"
+	@printf "$(CYAN)=== Installing ${NAME} to $(INSTALL_BIN_DIR) and systemd service files... ===$(NC)\n"
 	sudo install -Dm755 $(OUT_DIR)/${NAME} $(INSTALL_BIN_DIR)/${NAME}
 	sudo install -Dm644 $(DIST_DIR)/${NAME}.service.ready $(INSTALL_UNIT_DIR)/${NAME}.service
 	sudo install -Dm644 $(DIST_DIR)/lock.target $(INSTALL_UNIT_DIR)/lock.target
 	sudo install -Dm644 $(DIST_DIR)/unlock.target $(INSTALL_UNIT_DIR)/unlock.target
 	sudo install -Dm644 $(DIST_DIR)/sleep.target $(INSTALL_UNIT_DIR)/sleep.target
 	
-	@printf "$(YELLOW)--- Reloading systemd user daemon and enabling service for $(ACTUAL_USER)... ---$(NC)\n"
+	@printf "$(YELLOW)=== Reloading systemd user daemon and enabling service for $(ACTUAL_USER)... ===$(NC)\n"
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user daemon-reload
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user enable --now ${NAME}.service
-	@printf "$(GREEN)--- Installation complete. ${NAME} is now running. ---$(NC)\n"
+	@printf "$(GREEN)=== Installation complete. ${NAME} is now running. ===$(NC)\n"
 
 uninstall:
-	@printf "$(YELLOW)--- Stopping and disabling ${NAME} services for $(ACTUAL_USER)... ---$(NC)\n"
+	@printf "$(YELLOW)=== Stopping and disabling ${NAME} services for $(ACTUAL_USER)... ===$(NC)\n"
 	-sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user stop ${NAME}.service lock.target unlock.target sleep.target
 	-sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user disable ${NAME}.service
 	
-	@printf "$(CYAN)--- Removing system files... ---$(NC)\n"
+	@printf "$(CYAN)=== Removing system files... ===$(NC)\n"
 	sudo rm -f $(INSTALL_UNIT_DIR)/${NAME}.service
 	sudo rm -f $(INSTALL_UNIT_DIR)/lock.target
 	sudo rm -f $(INSTALL_UNIT_DIR)/unlock.target
 	sudo rm -f $(INSTALL_UNIT_DIR)/sleep.target
 	sudo rm -f $(INSTALL_BIN_DIR)/${NAME}
 
-	@printf "$(CYAN)--- Cleaning up systemd state... ---$(NC)\n"
+	@printf "$(CYAN)=== Cleaning up systemd state... ===$(NC)\n"
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user daemon-reload || true
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user reset-failed || true
-	@printf "$(GREEN)--- Uninstallation complete. ---$(NC)\n"
+	@printf "$(GREEN)=== Uninstallation complete. ===$(NC)\n"
 
 update:
-	@printf "$(CYAN)--- Updating ${NAME}... ---$(NC)\n"
+	@printf "$(CYAN)=== Updating ${NAME}... ===$(NC)\n"
 	$(MAKE) uninstall
 	$(MAKE) install
-	@printf "$(GREEN)--- Update complete. ---$(NC)\n"
+	@printf "$(GREEN)=== Update complete. ===$(NC)\n"
 
 update-binary: build
-	@printf "$(CYAN)--- Updating ${NAME} binary only... ---$(NC)\n"
+	@printf "$(CYAN)=== Updating ${NAME} binary only... ===$(NC)\n"
 	sudo install -Dm755 $(OUT_DIR)/${NAME} $(INSTALL_BIN_DIR)/${NAME}
 	
-	@printf "$(YELLOW)--- Reloading systemd user daemon and restarting service for $(ACTUAL_USER)... ---$(NC)\n"
+	@printf "$(YELLOW)=== Reloading systemd user daemon and restarting service for $(ACTUAL_USER)... ===$(NC)\n"
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user daemon-reload
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user restart ${NAME}.service
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user reset-failed ${NAME}.service || true
-	@printf "$(GREEN)--- Binary update complete. ---$(NC)\n"
+	@printf "$(GREEN)=== Binary update complete. ===$(NC)\n"
 
 # CI-optimized packaging
 fpm-packages: build stage
-	@printf "$(CYAN)--- Packaging version ${VERSION}... ---$(NC)\n"
+	@printf "$(CYAN)=== Packaging version ${VERSION}... ===$(NC)\n"
 	for type in rpm deb; do \
 		fpm -s dir -t $$type \
 			-n ${NAME} \
@@ -120,31 +120,31 @@ fpm-packages: build stage
 			${DIST_DIR}/unlock.target=$(REL_UNIT_DIR)/unlock.target \
 			${DIST_DIR}/sleep.target=$(REL_UNIT_DIR)/sleep.target; \
 	done
-	@printf "$(GREEN)--- Packaging complete. ---$(NC)\n"
+	@printf "$(GREEN)=== Packaging complete. ===$(NC)\n"
 
 sign:
-	@printf "$(CYAN)--- Signing RPM package... ---$(NC)\n"
+	@printf "$(CYAN)=== Signing RPM package... ===$(NC)\n"
 	rpmsign --addsign ${OUT_DIR}/${NAME}-v${VERSION}.rpm
 	
-	@printf "$(CYAN)--- Signing Deb package... ---$(NC)\n"
+	@printf "$(CYAN)=== Signing Deb package... ===$(NC)\n"
 	debsigs --sign=origin --default-key="$(GPG_IDENTITY)" ${OUT_DIR}/${NAME}-v${VERSION}.deb
 
 checksums:
-	@printf "$(CYAN)--- Generating SHA256 checksums... ---$(NC)\n"
+	@printf "$(CYAN)=== Generating SHA256 checksums... ===$(NC)\n"
 	sha256sum $(OUT_DIR)/$(NAME)-v$(VERSION).* | \
 	gpg --batch --yes --clearsign --digest-algo SHA256 --output $(OUT_DIR)/hashes.sha256.asc
 
 publickey:
-	@printf "$(CYAN)--- Exporting GPG public key... ---$(NC)\n"
+	@printf "$(CYAN)=== Exporting GPG public key... ===$(NC)\n"
 	gpg --batch --armor --export ${GPG_IDENTITY} > out/public.key
-	@printf "$(GREEN)--- Public key exported to ${OUT_DIR}/public.key ---$(NC)\n"
+	@printf "$(GREEN)=== Public key exported to ${OUT_DIR}/public.key ===$(NC)\n"
 
 release: fpm-packages sign checksums publickey
-	@printf "$(GREEN)--- Build, Packaging, Signing, and Checksums complete. ---$(NC)\n"
+	@printf "$(GREEN)=== Build, Packaging, Signing, and Checksums complete. ===$(NC)\n"
 
 clean:
-	@printf "$(CYAN)--- Cleaning up build artifacts... ---$(NC)\n"
+	@printf "$(CYAN)=== Cleaning up build artifacts... ===$(NC)\n"
 	rm -rf $(OUT_DIR) $(DIST_DIR)/*.ready
-	@printf "$(GREEN)--- Clean complete. ---$(NC)\n"
+	@printf "$(GREEN)=== Clean complete. ===$(NC)\n"
 
 .PHONY: all test build stage install uninstall update update-binary fpm-packages sign checksums publickey release clean
