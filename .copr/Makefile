@@ -23,7 +23,7 @@ srpm:
 	tar -C /tmp/go-home -xzf /tmp/go.tar.gz
 
 	@echo "Syncing Spec to Version: $(VERSION)"
-	sed "s/^Version:.*/Version: $(VERSION)/" $(TOP_DIR)/systemd-lock-handler.spec > $(TOP_DIR)/systemd-lock-handler.temp.spec
+	sed "s/^\(Version:\)\s*.*/\1 $(VERSION)/" $(TOP_DIR)/systemd-lock-handler.spec > $(TOP_DIR)/systemd-lock-handler.temp.spec
 
 	rpmautospec process-distgit \
 		$(TOP_DIR)/systemd-lock-handler.temp.spec \
