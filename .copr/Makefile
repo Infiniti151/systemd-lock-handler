@@ -22,17 +22,20 @@ srpm:
 	V_TAG=$$(cd $(TOP_DIR) && git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'); \
 	VERSION=$${V_TAG:-6}; \
 	LATEST_GO=$$(curl -s https://go.dev/VERSION?m=text | head -n1); \
+	GO_URL="https://go.dev/dl/$${LATEST_GO}.linux-$(GO_ARCH).tar.gz"; \
 	\
 	echo "Project Root: $(TOP_DIR)"; \
 	echo "Building Version: $$VERSION"; \
 	echo "Detected Arch: $(ARCH) -> Using Go Arch: $(GO_ARCH)"; \
+	echo "Target Go: $$LATEST_GO"; \
 	\
 	# 3. Spec Manipulation (Local Paths to fix rpmautospec parsing)
 	cd $(TOP_DIR) && sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" systemd-lock-handler.spec > systemd-lock-handler.temp.spec; \
 	\
 	# 4. Go Installation
-	echo "Installing $$LATEST_GO..."; \
-	curl -sL https://go.dev/dl/$$LATEST_GO.linux-$(GO_ARCH).tar.gz -o /tmp/go.tar.gz; \
+	echo "Downloading from $$GO_URL..."; \
+	curl -sL "$$GO_URL" -o /tmp/go.tar.gz; \
+	if [ ! -s /tmp/go.tar.gz ]; then echo "Download failed!"; exit 1; fi; \
 	mkdir -p /tmp/go-home; \
 	tar -C /tmp/go-home -xzf /tmp/go.tar.gz; \
 	\
