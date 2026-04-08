@@ -6,7 +6,6 @@ Summary:        Systemd user service for lock/unlock events
 License:        ISC
 URL:            https://github.com/Infiniti151/systemd-lock-handler
 Source0:        systemd-lock-handler.tar.gz
-BuildRequires:  golang
 BuildRequires:  systemd-rpm-macros
 BuildRequires:  tree-sitter-srpm-macros
 BuildRequires:  go-rpm-macros
@@ -18,6 +17,7 @@ A systemd user service to handle lock/unlock events.
 %setup -q -n .
 
 %build
+export PATH="/tmp/go-home/go/bin:$PATH"
 go build -ldflags '-s -w' -o systemd-lock-handler main.go
 
 %check
