@@ -1,6 +1,6 @@
 
 Name:           systemd-lock-handler
-Version:        %{?_version}%{!?_version:6}
+Version:        6
 Release:        %autorelease
 Summary:        Systemd user service for lock/unlock events
 License:        ISC
