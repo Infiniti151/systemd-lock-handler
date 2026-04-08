@@ -14,3 +14,7 @@ systemd-lock-handler
 # --- ACT Files ---
 *.act
 .secrets
+
+# --- COPR Files ---
+systemd-lock-handler.spec.processed
+systemd-lock-handler.spec.tmp

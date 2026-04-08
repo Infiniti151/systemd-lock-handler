@@ -1,26 +1,31 @@
 # .copr/Makefile
 
-VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
-VERSION := $(if $(VERSION),$(VERSION),6)
-
 TOP_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/..
 
 srpm:
 	if [ -n "$(outdir)" ]; then \
-		dnf install -y git curl go-rpm-macros; \
+		dnf install -y git go-rpm-macros rpmautospec; \
 	fi
 
-	$(eval LATEST_GO := $(shell curl -s https://go.dev/VERSION?m=text | head -n1))
+	$(eval VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'))
+	$(eval VERSION := $(if $(VERSION),$(VERSION),6))
 	
+	@echo "Project Root: $(TOP_DIR)"
+	@echo "Building Version: $(VERSION)"
+
+	$(eval LATEST_GO := $(shell curl -s https://go.dev/VERSION?m=text | head -n1))
 	@echo "Installing $(LATEST_GO)..."
 	curl -sL https://go.dev/dl/$(LATEST_GO).linux-amd64.tar.gz -o /tmp/go.tar.gz
 	mkdir -p /tmp/go-home
 	tar -C /tmp/go-home -xzf /tmp/go.tar.gz
-	
 	$(eval export PATH := /tmp/go-home/go/bin:$(PATH))
-	
-	go version
-	# -----------------------------
+
+	@echo "Syncing Spec to Version: $(VERSION)"
+	sed "s/^Version:.*/Version: $(VERSION)/" $(TOP_DIR)/systemd-lock-handler.spec > $(TOP_DIR)/systemd-lock-handler.spec.tmp
+
+	rpmautospec process-distgit \
+		$(TOP_DIR)/systemd-lock-handler.spec.tmp \
+		$(TOP_DIR)/systemd-lock-handler.spec.processed
 
 	$(MAKE) -C $(TOP_DIR) stage VERSION=$(VERSION)
 	
@@ -38,4 +43,4 @@ srpm:
 		--define "_sourcedir $(TOP_DIR)/out" \
 		--define "_srcrpmdir $(if $(outdir),$(outdir),$(TOP_DIR)/out)" \
 		--define "_version $(VERSION)" \
-		$(TOP_DIR)/systemd-lock-handler.spec
+		$(TOP_DIR)/systemd-lock-handler.spec.processed

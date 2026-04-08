@@ -1,26 +1,28 @@
 
 Name:           systemd-lock-handler
 Version:        %{?_version}%{!?_version:6}
-Release:        1%{?dist}
+Release:        %autorelease
 Summary:        Systemd user service for lock/unlock events
 License:        ISC
 URL:            https://github.com/Infiniti151/systemd-lock-handler
 Source0:        systemd-lock-handler.tar.gz
 BuildRequires:  systemd-rpm-macros
-BuildRequires:  tree-sitter-srpm-macros
 BuildRequires:  go-rpm-macros
+BuildRequires:  compiler(go-compiler)
 
 %description
 A systemd user service to handle lock/unlock events.
 
 %prep
-%setup -q -n .
+%setup -q -c -T
+tar -xf %{SOURCE0}
 
 %build
 export PATH="/tmp/go-home/go/bin:$PATH"
 go build -ldflags '-s -w' -o systemd-lock-handler main.go
 
 %check
+export PATH="/tmp/go-home/go/bin:$PATH"
 go test -v ./...
 
 %install
@@ -35,3 +37,15 @@ install -m 644 dist/*.target %{buildroot}%{_userunitdir}/
 %{_bindir}/systemd-lock-handler
 %{_userunitdir}/*.service
 %{_userunitdir}/*.target
+
+%post
+%systemd_user_post systemd-lock-handler.service
+
+%preun
+%systemd_user_preun systemd-lock-handler.service
+
+%postun
+%systemd_user_postun_with_restart systemd-lock-handler.service
+
+%changelog
+%autochangelog
