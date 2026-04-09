@@ -4,7 +4,7 @@ TOP_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/..
 
 srpm:
 	if [ -n "$(outdir)" ]; then \
-        dnf install -y git go-rpm-macros rpmautospec python3-rpmautospec+{click,pygit2,rpm}; \
+        dnf install -y git go-rpm-macros systemd-rpm-macros rpmautospec python3-rpmautospec+{click,pygit2,rpm}; \
     fi; \
 	\
 	cd $(TOP_DIR) && git config --global --add safe.directory "$$(pwd)"; \
