@@ -4,11 +4,18 @@ TOP_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/..
 
 srpm:
 	if [ -n "$(outdir)" ]; then \
-        dnf install -y git go-rpm-macros systemd-rpm-macros rpmautospec python3-rpmautospec+{click,pygit2,rpm}; \
+        dnf in -y git go-rpm-macros systemd-rpm-macros mock-rpmautospec \
+		rpmautospec python3-rpmautospec+all python3-rpmautospec-core; \
     fi; \
 	\
 	git config --global --add safe.directory "*"; \
-    (git fetch --tags --unshallow 2>/dev/null || true); \
+    echo "=== Fetching full history and tags ==="; \
+    git fetch --tags --prune --unshallow 2>/dev/null || true; \
+    git fetch --tags --prune --depth=100 origin "+refs/heads/*:refs/remotes/origin/*" 2>/dev/null || true; \
+    git fetch --tags --prune origin tag 'v*' 2>/dev/null || true; \
+	\
+    echo "=== Current git describe: $$(git describe --tags --abbrev=0 2>/dev/null || echo 'no tag found') ==="; \
+    echo "=== Number of commits available: $$(git rev-list --count HEAD 2>/dev/null || echo 'unknown') ==="; \
 	\
     V_TAG=$$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'); \
     VERSION=$${V_TAG:-6}; \
@@ -33,6 +40,12 @@ srpm:
 	\
 	sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" $(TOP_DIR)/systemd-lock-handler.spec.template > $(TOP_DIR)/systemd-lock-handler-copr.spec; \
 	echo "=== Version $$VERSION written to spec file ==="; \
+	echo "=== Content of copr.spec (first 30 lines) ==="; \
+    head -n 30 $(TOP_DIR)/systemd-lock-handler-copr.spec; \
+	echo "=== Evaluating macros ==="; \
+	echo "autorelease:" $$(rpm --eval '%autorelease'); \
+    echo "autochangelog:" $$(rpm --eval '%autochangelog'); \
+    echo "=== Running rpmautospec process-distgit ==="; \
 	rpmautospec process-distgit systemd-lock-handler-copr.spec systemd-lock-handler.spec; \
 	echo "=== Generated .spec file ==="; \
 	\
