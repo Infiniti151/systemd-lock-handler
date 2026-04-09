@@ -4,22 +4,17 @@ TOP_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/..
 
 srpm:
 	if [ -n "$(outdir)" ]; then \
-        dnf in -y git go-rpm-macros systemd-rpm-macros mock-rpmautospec \
-		rpmautospec python3-rpmautospec+all python3-rpmautospec-core; \
+        dnf install -y git go-rpm-macros rpmautospec; \
     fi; \
 	\
-	git config --global --add safe.directory "*"; \
-    echo "=== Fetching full history and tags ==="; \
-    git fetch --tags --prune --unshallow 2>/dev/null || true; \
-    git fetch --tags --prune --depth=100 origin "+refs/heads/*:refs/remotes/origin/*" 2>/dev/null || true; \
-    git fetch --tags --prune origin tag 'v*' 2>/dev/null || true; \
-	\
-    echo "=== Current git describe: $$(git describe --tags --abbrev=0 2>/dev/null || echo 'no tag found') ==="; \
-    echo "=== Number of commits available: $$(git rev-list --count HEAD 2>/dev/null || echo 'unknown') ==="; \
+	cd $(TOP_DIR) && git config --global --add safe.directory "$$(pwd)"; \
+    (git fetch --tags --unshallow 2>/dev/null || true); \
 	\
     V_TAG=$$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'); \
     VERSION=$${V_TAG:-6}; \
-	\
+	DATE_STR=$$(date "+%a %b %d %Y"); \
+	CHLOG_HDR="* $$DATE_STR Infiniti151 <43163551+Infiniti151@users.noreply.github.com> - $$VERSION-1"; \
+	CHLOG_URL="- Full release notes: https://github.com/Infiniti151/systemd-lock-handler/releases/tag/v$$VERSION"; \
     LATEST_GO=$$(curl -s https://go.dev/VERSION?m=text | head -n1); \
 	\
     echo "=== Project Root: $(TOP_DIR) ==="; \
@@ -38,16 +33,11 @@ srpm:
         --exclude=README.md --exclude=Makefile --exclude=systemd-lock-handler.spec.template \
 		--exclude=dist/systemd-lock-handler.service --exclude=.gitignore -C $(TOP_DIR) .; \
 	\
-	sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" $(TOP_DIR)/systemd-lock-handler.spec.template > $(TOP_DIR)/systemd-lock-handler-copr.spec; \
-	echo "=== Version $$VERSION written to spec file ==="; \
-	echo "=== Content of copr.spec (first 30 lines) ==="; \
-    head -n 30 $(TOP_DIR)/systemd-lock-handler-copr.spec; \
-	echo "=== Evaluating macros ==="; \
-	cd $(TOP_DIR) && echo "autorelease:" $$(rpm --eval '%autorelease'); \
-    cd $(TOP_DIR) && echo "autochangelog:" $$(rpm --eval '%autochangelog'); \
-    echo "=== Running rpmautospec process-distgit ==="; \
-	cd $(TOP_DIR) && rpmautospec process-distgit systemd-lock-handler-copr.spec systemd-lock-handler.spec; \
-	echo "=== Generated .spec file ==="; \
+	sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" \
+	$(TOP_DIR)/systemd-lock-handler.spec.template > $(TOP_DIR)/systemd-lock-handler.spec;\
+	sed -i -e "/%changelog/a $$CHLOG_HDR\n$$CHLOG_URL" \
+	$(TOP_DIR)/systemd-lock-handler.spec; \
+	echo "=== Spec file generated with version $$VERSION ==="; \
 	\
 	echo "=== Running rpmbuild with version $$VERSION ==="; \
 	cd $(TOP_DIR) && rpmbuild -bs \
@@ -60,4 +50,3 @@ srpm:
 	if [ -n "$(outdir)" ]; then \
         ls -l "$(outdir)"/systemd-lock-handler-*.src.rpm 2>/dev/null || echo "No SRPM found"; \
     fi; \
-	rm -f ./systemd-lock-handler-copr.spec

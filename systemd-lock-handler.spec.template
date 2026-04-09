@@ -111,4 +111,3 @@ echo "=*=*=*> Finished Install Phase - Moving to File Manifest <*=*=*="
 %systemd_user_postun_with_restart systemd-lock-handler.service
 
 %changelog
-%autochangelog

@@ -17,4 +17,3 @@ systemd-lock-handler
 
 # --- COPR Files ---
 systemd-lock-handler.spec
-systemd-lock-handler-copr.spec
