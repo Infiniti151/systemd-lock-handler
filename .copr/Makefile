@@ -4,7 +4,7 @@ TOP_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/..
 
 srpm:
 	if [ -n "$(outdir)" ]; then \
-        dnf install -y git go-rpm-macros rpmautospec; \
+        dnf install -y git go-rpm-macros rpmautospec python3-rpmautospec+{click,pygit2,rpm}; \
     fi; \
 	\
 	cd $(TOP_DIR) && git config --global --add safe.directory "$$(pwd)"; \
@@ -27,20 +27,24 @@ srpm:
     cd $(TOP_DIR) && $(MAKE) stage VERSION=$$VERSION; \
 	\
     tar -czf $(TOP_DIR)/out/systemd-lock-handler.tar.gz \
-        --exclude=out --exclude=.git --exclude=.github --exclude=*.png \
-        --exclude=README.md --exclude=.gitignore -C $(TOP_DIR) .; \
+        --exclude=out --exclude=.git --exclude=.github --exclude=.copr --exclude=*.png \
+        --exclude=README.md --exclude=Makefile --exclude=systemd-lock-handler.spec.template \
+		--exclude=dist/systemd-lock-handler.service --exclude=.gitignore -C $(TOP_DIR) .; \
 	\
 	sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" $(TOP_DIR)/systemd-lock-handler.spec.template > $(TOP_DIR)/systemd-lock-handler.spec; \
-	echo "=== Spec file generated with version $$VERSION ==="; \
+	echo "=== Version $$VERSION written to spec file ==="; \
+	rpmautospec process-distgit systemd-lock-handler.spec systemd-lock-handler-copr.spec; \
+	echo "=== Generated COPR spec file ==="; \
 	\
 	echo "=== Running rpmbuild with version $$VERSION ==="; \
 	cd $(TOP_DIR) && rpmbuild -bs \
         --define "_sourcedir $$(pwd)/out" \
         --define "_srcrpmdir $(if $(outdir),$(outdir),$$(pwd)/out)" \
-        $(TOP_DIR)/systemd-lock-handler.spec && \
+        $(TOP_DIR)/systemd-lock-handler-copr.spec && \
 	echo "=== SUCCESS: SRPM built with version $$VERSION ===" || \
 	{ echo "ERROR: rpmbuild failed"; exit 1; }; \
 	\
 	if [ -n "$(outdir)" ]; then \
         ls -l "$(outdir)"/systemd-lock-handler-*.src.rpm 2>/dev/null || echo "No SRPM found"; \
     fi; \
+	rm -f ./systemd-lock-handler.spec

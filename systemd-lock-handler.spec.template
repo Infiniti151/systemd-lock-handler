@@ -49,7 +49,10 @@ fi
 echo "=== Go version: $($GO_BIN version) ==="
 
 export GOTOOLCHAIN=local
-export CGO_ENABLED=1
+export CGO_ENABLED=0
+
+echo "=== Go environment ==="
+$GO_BIN env
 
 echo "=== Building systemd-lock-handler ==="
 

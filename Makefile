@@ -144,7 +144,7 @@ release: fpm-packages sign checksums publickey
 
 clean:
 	@printf "$(CYAN)=== Cleaning up build artifacts... ===$(NC)\n"
-	rm -rf $(OUT_DIR) $(DIST_DIR)/*.ready
+	rm -rf $(OUT_DIR) $(DIST_DIR)/*.ready systemd-lock-handler{.spec,-copr.spec}
 	@printf "$(GREEN)=== Clean complete. ===$(NC)\n"
 
 .PHONY: all test build stage install uninstall update update-binary fpm-packages sign checksums publickey release clean

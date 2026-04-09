@@ -1,7 +1,7 @@
 systemd-lock-handler
 ====================
 
-[![Build](https://img.shields.io/github/actions/workflow/status/Infiniti151/systemd-lock-handler/build.yml?branch=main&style=for-the-badge&labelColor=489FC3)](https://github.com/Infiniti151/systemd-lock-handler/actions/workflows/build.yml) [![Latest Release](https://img.shields.io/github/v/release/Infiniti151/systemd-lock-handler?branch=main&style=for-the-badge&labelColor=489FC3&color=red)](https://github.com/Infiniti151/systemd-lock-handler/releases) [![Downloads](https://img.shields.io/github/downloads/Infiniti151/systemd-lock-handler/total.svg?Label=Downloads&style=for-the-badge&labelColor=489FC3&color=E38A27)](https://github.com/Infiniti151/systemd-lock-handler/releases) [![Go Version](https://img.shields.io/github/go-mod/go-version/Infiniti151/systemd-lock-handler?branch=main&style=for-the-badge&labelColor=489FC3&color=purple)](go.mod) [![GPG Signed](https://img.shields.io/badge/GPG-Signed-ffd700?branch=main&style=for-the-badge&labelColor=489FC3)](https://github.com/Infiniti151/systemd-lock-handler/releases/latest/download/public.key) [![License](https://img.shields.io/github/license/Infiniti151/systemd-lock-handler?style=for-the-badge&labelColor=489FC3&color=gray)](LICENSE)
+[![Build](https://img.shields.io/github/actions/workflow/status/Infiniti151/systemd-lock-handler/build.yml?branch=main&style=for-the-badge&labelColor=489FC3)](https://github.com/Infiniti151/systemd-lock-handler/actions/workflows/build.yml) [![COPR Build Status](https://img.shields.io/badge/dynamic/json?url=https://copr.fedorainfracloud.org/api_3/build/list/%3Fownername%3Dinfiniti151%26projectname%3Dsystemd-lock-handler%26packagename%3Dsystemd-lock-handler%26limit%3D1&query=$.items[0].state&label=COPR&style=for-the-badge&labelColor=489FC3&color=blue&logo=fedora&logoColor=white)](https://copr.fedorainfracloud.org/coprs/infiniti151/systemd-lock-handler/package/systemd-lock-handler/) [![Latest Release](https://img.shields.io/github/v/release/Infiniti151/systemd-lock-handler?branch=main&style=for-the-badge&labelColor=489FC3&color=red)](https://github.com/Infiniti151/systemd-lock-handler/releases) [![Downloads](https://img.shields.io/github/downloads/Infiniti151/systemd-lock-handler/total.svg?Label=Downloads&style=for-the-badge&labelColor=489FC3&color=E38A27)](https://github.com/Infiniti151/systemd-lock-handler/releases) [![Go Version](https://img.shields.io/github/go-mod/go-version/Infiniti151/systemd-lock-handler?branch=main&style=for-the-badge&labelColor=489FC3&color=purple)](go.mod) [![GPG Signed](https://img.shields.io/badge/GPG-Signed-ffd700?branch=main&style=for-the-badge&labelColor=489FC3)](https://github.com/Infiniti151/systemd-lock-handler/releases/latest/download/public.key) [![License](https://img.shields.io/github/license/Infiniti151/systemd-lock-handler?style=for-the-badge&labelColor=489FC3&color=gray)](LICENSE)
 
 `logind` (part of systemd) emits events when the system is locked, unlocked or
 goes into sleep.
@@ -34,8 +34,16 @@ Installation
 
 ## 🛡️ Verified Package Installation
 
-This package is digitally signed. To verify the integrity of the download:
-### Redhat based systems
+### Fedora
+1. **Enable COPR:**
+   ```bash
+   sudo dnf copr enable infiniti151/systemd-lock-handler
+
+2. **Install package:**
+   ```bash
+   sudo dnf install systemd-lock-handler
+
+### Other Redhat based distros
 
 1. **Import the public key:**
    ```bash
@@ -45,7 +53,7 @@ This package is digitally signed. To verify the integrity of the download:
    ```bash
    sudo dnf install $(curl -s https://api.github.com/repos/Infiniti151/systemd-lock-handler/releases/latest | grep "browser_download_url.*rpm" | cut -d '"' -f 4)
 
-### Debian based systems
+### Debian based distros
 
 1. **Import the public key:**
    ```bash
@@ -146,13 +154,13 @@ Be default, detection for all events (sleep, lock, and unlock) is enabled. This 
 | unlock | Unlock detection (unlock.target) | true |
 | block-sleep-lock | Filter out lock/unlock events caused by suspend/resume | false |
 
-**Example of lock and unlock detection turned off:**
+**Example of sleep detection turned off and sleep-lock filtering turned on:**
 
 Add flags using `systemctl --user edit systemd-lock-handler.service`
 ```
 [Service]
 ExecStart=
-ExecStart=/usr/bin/systemd-lock-handler -lock=false -unlock=false
+ExecStart=/usr/bin/systemd-lock-handler -sleep=false -block-sleep-lock=true
 ```
 
 Reload the daemon and restart the service:
