@@ -31,10 +31,10 @@ srpm:
         --exclude=README.md --exclude=Makefile --exclude=systemd-lock-handler.spec.template \
 		--exclude=dist/systemd-lock-handler.service --exclude=.gitignore -C $(TOP_DIR) .; \
 	\
-	sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" $(TOP_DIR)/systemd-lock-handler.spec.template > $(TOP_DIR)/systemd-lock-handler.spec; \
+	sed -r "s/^(Version:[[:space:]]*).*/\1$$VERSION/" $(TOP_DIR)/systemd-lock-handler.spec.template > $(TOP_DIR)/systemd-lock-handler-copr.spec; \
 	echo "=== Version $$VERSION written to spec file ==="; \
-	rpmautospec process-distgit systemd-lock-handler.spec systemd-lock-handler-copr.spec; \
-	echo "=== Generated COPR spec file ==="; \
+	rpmautospec process-distgit systemd-lock-handler-copr.spec systemd-lock-handler.spec; \
+	echo "=== Generated .spec file ==="; \
 	\
 	echo "=== Running rpmbuild with version $$VERSION ==="; \
 	cd $(TOP_DIR) && rpmbuild -bs \
@@ -47,4 +47,4 @@ srpm:
 	if [ -n "$(outdir)" ]; then \
         ls -l "$(outdir)"/systemd-lock-handler-*.src.rpm 2>/dev/null || echo "No SRPM found"; \
     fi; \
-	rm -f ./systemd-lock-handler.spec
+	rm -f ./systemd-lock-handler-copr.spec
