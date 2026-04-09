@@ -43,10 +43,10 @@ srpm:
 	echo "=== Content of copr.spec (first 30 lines) ==="; \
     head -n 30 $(TOP_DIR)/systemd-lock-handler-copr.spec; \
 	echo "=== Evaluating macros ==="; \
-	echo "autorelease:" $$(rpm --eval '%autorelease'); \
-    echo "autochangelog:" $$(rpm --eval '%autochangelog'); \
+	cd $(TOP_DIR) && echo "autorelease:" $$(rpm --eval '%autorelease'); \
+    cd $(TOP_DIR) && echo "autochangelog:" $$(rpm --eval '%autochangelog'); \
     echo "=== Running rpmautospec process-distgit ==="; \
-	rpmautospec process-distgit systemd-lock-handler-copr.spec systemd-lock-handler.spec; \
+	cd $(TOP_DIR) && rpmautospec process-distgit systemd-lock-handler-copr.spec systemd-lock-handler.spec; \
 	echo "=== Generated .spec file ==="; \
 	\
 	echo "=== Running rpmbuild with version $$VERSION ==="; \
