@@ -40,7 +40,7 @@ srpm:
 	cd $(TOP_DIR) && rpmbuild -bs \
         --define "_sourcedir $$(pwd)/out" \
         --define "_srcrpmdir $(if $(outdir),$(outdir),$$(pwd)/out)" \
-        $(TOP_DIR)/systemd-lock-handler-copr.spec && \
+        $(TOP_DIR)/systemd-lock-handler.spec && \
 	echo "=== SUCCESS: SRPM built with version $$VERSION ===" || \
 	{ echo "ERROR: rpmbuild failed"; exit 1; }; \
 	\
