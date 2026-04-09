@@ -7,7 +7,7 @@ srpm:
         dnf install -y git go-rpm-macros systemd-rpm-macros rpmautospec python3-rpmautospec+{click,pygit2,rpm}; \
     fi; \
 	\
-	cd $(TOP_DIR) && git config --global --add safe.directory "$$(pwd)"; \
+	git config --global --add safe.directory "*"; \
     (git fetch --tags --unshallow 2>/dev/null || true); \
 	\
     V_TAG=$$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'); \
