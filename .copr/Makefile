@@ -23,8 +23,8 @@ srpm:
     echo "=== Target Go: $$LATEST_GO ==="; \
 	\
 	mkdir -p $(TOP_DIR)/out; \
-	#curl -sL "https://go.dev/dl/$$LATEST_GO.linux-amd64.tar.gz" -o $(TOP_DIR)/out/go-amd64.tar.gz || { echo "Go amd64 download failed!"; exit 1; }; \
-	#curl -sL "https://go.dev/dl/$$LATEST_GO.linux-arm64.tar.gz" -o $(TOP_DIR)/out/go-arm64.tar.gz || { echo "Go arm64 download failed!"; exit 1; }; \
+	curl -sL "https://go.dev/dl/$$LATEST_GO.linux-amd64.tar.gz" -o $(TOP_DIR)/out/go-amd64.tar.gz || { echo "Go amd64 download failed!"; exit 1; }; \
+	curl -sL "https://go.dev/dl/$$LATEST_GO.linux-arm64.tar.gz" -o $(TOP_DIR)/out/go-arm64.tar.gz || { echo "Go arm64 download failed!"; exit 1; }; \
 	\
 	echo "=== Downloaded Go binaries ==="; \
     cd $(TOP_DIR) && $(MAKE) stage VERSION=$$V_FINAL; \
@@ -35,7 +35,7 @@ srpm:
 		--exclude=dist/systemd-lock-handler.service --exclude=.gitignore -C $(TOP_DIR) .; \
 	\
 	sed -r "s/^(Version:[[:space:]]*).*/\1$$V_FINAL/" \
-	$(TOP_DIR)/systemd-lock-handler.spec.template > $(TOP_DIR)/systemd-lock-handler.spec;\
+	$(TOP_DIR)/systemd-lock-handler.spec.template > $(TOP_DIR)/systemd-lock-handler.spec; \
 	sed -i -e "/%changelog/a $$CHLOG_HDR\n$$CHLOG_URL" \
 	$(TOP_DIR)/systemd-lock-handler.spec; \
 	echo "=== Spec file generated with version $$V_FINAL ==="; \
