@@ -104,6 +104,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: ${{ needs.check-updates.outputs.latest_go }}
+          cache: true
 
       - name: Import GPG key
         if: success()

@@ -32,6 +32,7 @@ NC     = \033[0m # No Color
 export ACTUAL_USER
 export USER_ID
 export USER_BUS
+export CGO_ENABLED=0
 
 all: build
 
@@ -40,7 +41,7 @@ ${NAME}:
 
 test:
 	@printf "$(CYAN)=== Running tests... ===$(NC)\n"
-	go test -v -race ./...
+	go test -v ./...
 	@printf "$(GREEN)=== All tests passed. ===$(NC)\n"
 
 build: test clean
