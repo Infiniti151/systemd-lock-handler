@@ -28,20 +28,21 @@ jobs:
       latest_sys: ${{ steps.check.outputs.latest_sys }}
     
     steps:
-      - uses: actions/checkout@v6
-
       - name: Check latest versions
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          current_go=$(grep '^go ' go.mod | awk '{print $2}')
+          GO_MOD=$(curl -s "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/go.mod")
+          
+          current_go=$(echo "$GO_MOD" | grep '^go ' | awk '{print $2}')
+          current_sysd=$(echo "$GO_MOD" | grep 'github.com/coreos/go-systemd' | awk '{print $2}')
+          current_dbus=$(echo "$GO_MOD" | grep 'github.com/godbus/dbus' | awk '{print $2}')
+          current_sys=$(echo "$GO_MOD" | grep 'golang.org/x/sys' | awk '{print $3}')
+
           latest_go=$(curl -s https://go.dev/VERSION?m=text | head -n1 | sed 's/^go//')
-
-          current_sysd=$(grep 'github.com/coreos/go-systemd' go.mod | awk '{print $2}')
-          current_dbus=$(grep 'github.com/godbus/dbus' go.mod | awk '{print $2}')
-          current_sys=$(grep 'golang.org/x/sys' go.mod | awk '{print $3}')
-
-          latest_sysd=$(curl -s https://api.github.com/repos/coreos/go-systemd/tags | jq -r '.[0].name')
-          latest_dbus=$(curl -s https://api.github.com/repos/godbus/dbus/tags | jq -r '.[0].name')
+          latest_sysd=$(gh api repos/coreos/go-systemd/tags --jq '.[0].name')
+          latest_dbus=$(gh api repos/godbus/dbus/tags --jq '.[0].name')
           latest_sys=$(curl -s https://proxy.golang.org/golang.org/x/sys/@latest | jq -r .Version)
 
           if (( ${#latest_go} * ${#latest_sysd} * ${#latest_dbus} * ${#latest_sys} == 0 )); then
