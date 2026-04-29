@@ -8,6 +8,7 @@ Release:        %autorelease
 Summary:        Systemd user service for lock/unlock events
 License:        ISC
 URL:            https://github.com/Infiniti151/systemd-lock-handler
+BugURL:         https://github.com/Infiniti151/systemd-lock-handler/issues
 Source0:        systemd-lock-handler.tar.gz
 Source1:        go-amd64.tar.gz
 Source2:        go-arm64.tar.gz
