@@ -7,7 +7,9 @@ After=graphical-session.target
 
 [Service]
 Slice=session.slice
-ExecStart={{BIN_PATH}}
+Environment="FLAGS="
+EnvironmentFile=-%h/.config/systemd-lock-handler.conf
+ExecStart={{BIN_PATH}} $FLAGS
 Type=notify
 Restart=always
 RestartSec=3s
