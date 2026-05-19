@@ -149,10 +149,10 @@ Be default, detection for all events (sleep, lock, and unlock) is enabled. This 
 
 | Flags | Function | Default |
 | :--- | :----: | :----: |
-| sleep | Suspend/resume detection (sleep.target) | true |
-| lock | Lock detection (lock.target) | true |
-| unlock | Unlock detection (unlock.target) | true |
-| block-sleep-lock | Filter out lock/unlock events caused by suspend/resume | false |
+| `sleep` | Suspend/resume detection (`sleep.target`) | true |
+| `lock` | Lock detection (`lock.target`) | true |
+| `unlock` | Unlock detection (`unlock.target`) | true |
+| `block-sleep-lock` | Filter out lock/unlock events caused by suspend/resume | false |
 
 **Example of sleep detection turned off and sleep-lock filtering turned on:**
 
