@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - '**.go'         
-      - '!go.mod'           
+      - '**.go'
+      - '!go.mod'
       - '!go.sum'
       - '!Makefile'
   schedule:
@@ -26,7 +26,7 @@ jobs:
       latest_dbus: ${{ steps.check.outputs.latest_dbus }}
       current_sys: ${{ steps.check.outputs.current_sys }}
       latest_sys: ${{ steps.check.outputs.latest_sys }}
-    
+
     steps:
       - name: Check latest versions
         id: check
@@ -34,7 +34,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           GO_MOD=$(curl -s "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/go.mod")
-          
+
           current_go=$(echo "$GO_MOD" | grep '^go ' | awk '{print $2}')
           current_sysd=$(echo "$GO_MOD" | grep 'github.com/coreos/go-systemd' | awk '{print $2}')
           current_dbus=$(echo "$GO_MOD" | grep 'github.com/godbus/dbus' | awk '{print $2}')
@@ -83,7 +83,7 @@ jobs:
             echo "latest_dbus=$latest_dbus"
             echo "current_sys=$current_sys"
             echo "latest_sys=$latest_sys"
-            
+
             # Use double brackets for safer string comparison in Bash
             if [[ "$current_go$current_sysd$current_dbus$current_sys" != "$latest_go$latest_sysd$latest_dbus$latest_sys" ]]; then
               echo "needs_update=true"
@@ -95,21 +95,25 @@ jobs:
   build-release:
     needs: check-updates
     if: |
-      always() && 
+      always() &&
       (needs.check-updates.outputs.needs_update == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version: ${{ needs.check-updates.outputs.latest_go }}
           cache: true
 
       - name: Import GPG key
         if: success()
-        uses: crazy-max/ghaction-import-gpg@v6
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
@@ -127,9 +131,9 @@ jobs:
           if [ "${{ needs.check-updates.outputs.current_sysd }}" != "${{ needs.check-updates.outputs.latest_sysd }}" ]; then
             old_v=$(echo "${{ needs.check-updates.outputs.current_sysd }}" | sed -E 's/^v([0-9]+).*/\1/')
             new_v=$(echo "${{ needs.check-updates.outputs.latest_sysd }}" | sed -E 's/^v([0-9]+).*/\1/')
-            
+
             [ "$old_v" != "$new_v" ] && sed -i "s|go-systemd/v${old_v}|go-systemd/v${new_v}|g" *.go
-            
+
             go get -u github.com/coreos/go-systemd/v${new_v}
             rm go.sum
           fi
@@ -137,15 +141,15 @@ jobs:
           if [ "${{ needs.check-updates.outputs.current_dbus }}" != "${{ needs.check-updates.outputs.latest_dbus }}" ]; then
             old_v=$(echo "${{ needs.check-updates.outputs.current_dbus }}" | sed -E 's/^v([0-9]+).*/\1/')
             new_v=$(echo "${{ needs.check-updates.outputs.latest_dbus }}" | sed -E 's/^v([0-9]+).*/\1/')
-            
+
             [ "$old_v" != "$new_v" ] && sed -i "s|dbus/v${old_v}|dbus/v${new_v}|g" *.go
-            
+
             go get -u github.com/godbus/dbus/v${new_v}
             rm go.sum
           fi
 
           if [ "${{ needs.check-updates.outputs.current_sys }}" != "${{ needs.check-updates.outputs.latest_sys }}" ]; then
-            
+
             go get -u golang.org/x/sys@${{ needs.check-updates.outputs.latest_sys }}
             rm go.sum
           fi
@@ -186,7 +190,7 @@ jobs:
         if: success()
         run: |
           git push
-      
+
       - name: Configure RPM Macros
         run: |
           cat <<EOF > ~/.rpmmacros
@@ -199,14 +203,21 @@ jobs:
 
       - name: Build, package, sign, and create checksums
         run: |
-          make release VERSION=${{ steps.release_number.outputs.release_number }} 
+          make release VERSION=${{ steps.release_number.outputs.release_number }}
 
       - name: Export public GPG key
         run: |
           gpg --batch --armor --export "43163551+Infiniti151@users.noreply.github.com" > out/public.key
 
+      - name: Generate Cryptographic Attestations
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
+        with:
+          subject-path: |
+            out/*.rpm
+            out/*.deb
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
         with:
           tag_name: v${{ steps.release_number.outputs.release_number }}
           name: v${{ steps.release_number.outputs.release_number }}
