@@ -99,6 +99,7 @@ jobs:
       (needs.check-updates.outputs.needs_update == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       id-token: write
       attestations: write
       artifact-metadata: write
@@ -221,6 +222,7 @@ jobs:
         with:
           tag_name: v${{ steps.release_number.outputs.release_number }}
           name: v${{ steps.release_number.outputs.release_number }}
+          target_commitish: ${{ github.sha }}
           files: out/*
           body: |
             Release #${{ steps.release_number.outputs.release_number }}
