@@ -26,8 +26,15 @@ jobs:
       latest_dbus: ${{ steps.check.outputs.latest_dbus }}
       current_sys: ${{ steps.check.outputs.current_sys }}
       latest_sys: ${{ steps.check.outputs.latest_sys }}
+      release_body: ${{ steps.check.outputs.release_body }}
 
     steps:
+      - name: Checkout code for push inspection
+        if: github.event_name == 'push'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 2
+
       - name: Check latest versions
         id: check
         env:
@@ -74,6 +81,40 @@ jobs:
           print_row "x/sys" "$current_sys" "$latest_sys"
           echo -e "$LINE\n"
 
+          BODY=""
+
+          # 1. Parse Version-bump updates (Cron / Dispatch)
+          if [[ "$current_go" != "$latest_go" ]]; then
+            BODY="${BODY}- Upgraded Go compiler environment from **${current_go}** to **${latest_go}**\n"
+          fi
+          if [[ "$current_sysd" != "$latest_sysd" ]]; then
+            BODY="${BODY}- Updated \`coreos/go-systemd\` from **${current_sysd}** to **${latest_sysd}**\n"
+          fi
+          if [[ "$current_dbus" != "$latest_dbus" ]]; then
+            BODY="${BODY}- Updated \`godbus/dbus\` from **${current_dbus}** to **${latest_dbus}**\n"
+          fi
+          if [[ "$current_sys" != "$latest_sys" ]]; then
+            BODY="${BODY}- Updated \`x/sys\` from **${current_sys}** to **${latest_sys}**\n"
+          fi
+
+          # 2. Parse direct code updates (Push events)
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Verify exactly what files were altered in the push matrix commit
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} || true)
+
+            if echo "$CHANGED_FILES" | grep -q "main.go"; then
+              BODY="${BODY}- Updated logic in \`main.go\`\n"
+            fi
+            if echo "$CHANGED_FILES" | grep -q "main_test.go"; then
+              BODY="${BODY}- Updated unit tests in \`main_test.go\`\n"
+            fi
+          fi
+
+          # 3. Fallback for manual workflow_dispatch runs with no version updates
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "$BODY" ]]; then
+            BODY="- Manual workflow build execution pipeline trigger. Dependency trees remained up to date.\n"
+          fi
+
           {
             echo "current_go=$current_go"
             echo "latest_go=$latest_go"
@@ -84,19 +125,23 @@ jobs:
             echo "current_sys=$current_sys"
             echo "latest_sys=$latest_sys"
 
-            # Use double brackets for safer string comparison in Bash
             if [[ "$current_go$current_sysd$current_dbus$current_sys" != "$latest_go$latest_sysd$latest_dbus$latest_sys" ]]; then
               echo "needs_update=true"
             else
               echo "needs_update=false"
             fi
+
+            echo "release_body<<EOF"
+            echo -e "$BODY"
+            echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
   build-release:
     needs: check-updates
     if: |
-      always() &&
-      (needs.check-updates.outputs.needs_update == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      needs.check-updates.outputs.needs_update == 'true' ||
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -113,73 +158,94 @@ jobs:
           cache: true
 
       - name: Import GPG key
-        if: success()
+        id: import-gpg
         uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
-          git_config_global: true
-          git_tag_gpgsign: true
 
       - name: Update dependencies and source code
+        env:
+          CURRENT_GO: ${{ needs.check-updates.outputs.current_go }}
+          LATEST_GO: ${{ needs.check-updates.outputs.latest_go }}
+          CURRENT_SYSD: ${{ needs.check-updates.outputs.current_sysd }}
+          LATEST_SYSD: ${{ needs.check-updates.outputs.latest_sysd }}
+          CURRENT_DBUS: ${{ needs.check-updates.outputs.current_dbus }}
+          LATEST_DBUS: ${{ needs.check-updates.outputs.latest_dbus }}
+          CURRENT_SYS: ${{ needs.check-updates.outputs.current_sys }}
+          LATEST_SYS: ${{ needs.check-updates.outputs.latest_sys }}
         run: |
-          if [ "${{ needs.check-updates.outputs.current_go }}" != "${{ needs.check-updates.outputs.latest_go }}" ]; then
-            go mod edit -go=${{ needs.check-updates.outputs.latest_go }}
+          if [ "$CURRENT_GO" != "$LATEST_GO" ]; then
+            go mod edit -go="$LATEST_GO"
           fi
 
-          if [ "${{ needs.check-updates.outputs.current_sysd }}" != "${{ needs.check-updates.outputs.latest_sysd }}" ]; then
-            old_v=$(echo "${{ needs.check-updates.outputs.current_sysd }}" | sed -E 's/^v([0-9]+).*/\1/')
-            new_v=$(echo "${{ needs.check-updates.outputs.latest_sysd }}" | sed -E 's/^v([0-9]+).*/\1/')
-
-            [ "$old_v" != "$new_v" ] && sed -i "s|go-systemd/v${old_v}|go-systemd/v${new_v}|g" *.go
-
-            go get -u github.com/coreos/go-systemd/v${new_v}
-            rm go.sum
+          if [ "$CURRENT_SYSD" != "$LATEST_SYSD" ]; then
+            OLD_SYSD_MAJOR="${CURRENT_SYSD%%.*}"
+            NEW_SYSD_MAJOR="${LATEST_SYSD%%.*}"
+            if [ "$OLD_SYSD_MAJOR" != "$NEW_SYSD_MAJOR" ]; then
+              sed -i "s|go-systemd/${OLD_SYSD_MAJOR}|go-systemd/${NEW_SYSD_MAJOR}|g" *.go
+            fi
+            go get -u "github.com/coreos/go-systemd/${NEW_SYSD_MAJOR}@${LATEST_SYSD}"
           fi
 
-          if [ "${{ needs.check-updates.outputs.current_dbus }}" != "${{ needs.check-updates.outputs.latest_dbus }}" ]; then
-            old_v=$(echo "${{ needs.check-updates.outputs.current_dbus }}" | sed -E 's/^v([0-9]+).*/\1/')
-            new_v=$(echo "${{ needs.check-updates.outputs.latest_dbus }}" | sed -E 's/^v([0-9]+).*/\1/')
-
-            [ "$old_v" != "$new_v" ] && sed -i "s|dbus/v${old_v}|dbus/v${new_v}|g" *.go
-
-            go get -u github.com/godbus/dbus/v${new_v}
-            rm go.sum
+          if [ "$CURRENT_DBUS" != "$LATEST_DBUS" ]; then
+            OLD_DBUS_MAJOR="${CURRENT_DBUS%%.*}"
+            NEW_DBUS_MAJOR="${LATEST_DBUS%%.*}"
+            if [ "$OLD_DBUS_MAJOR" != "$NEW_DBUS_MAJOR" ]; then
+              sed -i "s|dbus/${OLD_DBUS_MAJOR}|dbus/${NEW_DBUS_MAJOR}|g" *.go
+            fi
+            go get -u "github.com/godbus/dbus/${NEW_DBUS_MAJOR}@${LATEST_DBUS}"
           fi
 
-          if [ "${{ needs.check-updates.outputs.current_sys }}" != "${{ needs.check-updates.outputs.latest_sys }}" ]; then
-
-            go get -u golang.org/x/sys@${{ needs.check-updates.outputs.latest_sys }}
-            rm go.sum
+          if [ "$CURRENT_SYS" != "$LATEST_SYS" ]; then
+            go get -u "golang.org/x/sys@${LATEST_SYS}"
           fi
 
+          rm -f go.sum
           go mod tidy
 
       - name: Compute next release number
         id: release_number
         run: |
-          git fetch --tags
-          latest=$(git tag | grep '^v[0-9]\+$' | sort -V | tail -n1)
-          num=${latest#v}
-          next=$(( ${num:-0} + 1 ))
-          echo "release_number=$next" >> $GITHUB_OUTPUT
-          echo "Next release number: $next"
+          git fetch --tags --unshallow 2>/dev/null || git fetch --tags
 
-      - name: Run Tests
+          LATEST_TAG=$(git describe --tags --abbrev=0 --match="v[0-9]*")
+
+          NUM=${LATEST_TAG#v}
+          NEXT_NUM=$(( ${NUM:-0} + 1 ))
+
+          echo "release_number=$NEXT_NUM" >> "$GITHUB_OUTPUT"
+          echo "Next release number: $NEXT_NUM"
+
+      - name: Run tests
         run: |
           dbus-run-session -- make test
 
-      - name: Commit updated files
-        if: success()
+      - name: Append sanitized release body to spec file
+        env:
+          RAW_BODY: ${{ needs.check-updates.outputs.release_body }}
+          RELEASE_NUMBER: ${{ steps.release_number.outputs.release_number }}
+          TARGET_GO: ${{ needs.check-updates.outputs.latest_go }}
+          CHLOG_NAME: ${{ steps.import-gpg.outputs.name }}
+          CHLOG_EMAIL: ${{ steps.import-gpg.outputs.email }}
         run: |
-          git add .
-          if ! git diff --cached --quiet; then
-            git commit -m "Update dependencies for release v${{ steps.release_number.outputs.release_number }} [skip ci]"
-          else
-            echo "No changes to commit"
-          fi
+          DATE_STR=$(date "+%a %b %d %Y")
+          CHLOG_HDR="* $DATE_STR $CHLOG_NAME <$CHLOG_EMAIL> - ${RELEASE_NUMBER}-1"
+
+          EXPANDED_TEXT=$(printf "%b" "$RAW_BODY")
+          CLEAN_BODY=$(echo "$EXPANDED_TEXT" | sed -e 's/\\//g' -e 's/\*//g')
+
+          sed -i "s/^Version:[[:space:]]*.*/Version:        ${RELEASE_NUMBER}/" systemd-lock-handler.spec
+          sed -i "s/^%global target_go_ver.*/%global target_go_ver ${TARGET_GO}/" systemd-lock-handler.spec
+
+          cat <<EOF > changelog.tmp
+          $CHLOG_HDR
+          $CLEAN_BODY
+
+          EOF
+
+          sed -i '/%changelog/r changelog.tmp' systemd-lock-handler.spec
+          rm changelog.tmp
 
       - name: Install packaging dependencies
         run: |
@@ -187,16 +253,14 @@ jobs:
           sudo apt-get install -y ruby ruby-dev build-essential rpm debsigs
           sudo gem install --no-document fpm
 
-      - name: Push updated files
-        if: success()
-        run: |
-          git push
-
-      - name: Configure RPM Macros
+      - name: Configure RPM macros
+        env:
+          NAME: ${{ steps.import-gpg.outputs.name }}
+          EMAIL: ${{ steps.import-gpg.outputs.email }}
         run: |
           cat <<EOF > ~/.rpmmacros
           %_signature gpg
-          %_gpg_name Infiniti151 <43163551+Infiniti151@users.noreply.github.com>
+          %_gpg_name $NAME <$EMAIL>
           %_gpg_path ~/.gnupg
           %__gpg $(command -v gpg)
           %__gpg_sign_args --batch --no-tty --pinentry-mode loopback
@@ -208,28 +272,33 @@ jobs:
 
       - name: Export public GPG key
         run: |
-          gpg --batch --armor --export "43163551+Infiniti151@users.noreply.github.com" > out/public.key
+          gpg --batch --armor --export ${{ steps.import-gpg.outputs.email }} > out/public.key
 
-      - name: Generate Cryptographic Attestations
+      - name: Push updated files
+        uses: suzuki-shunsuke/commit-action@06e3b49d4706498d325d29bd85adc82ecf2f5d8f # v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          commit_message: "🤖 Automated version bump to v${{ steps.release_number.outputs.release_number }} [skip ci]"
+          fail_on_self_push: false
+
+      - name: Generate cryptographic attestations
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
         with:
           subject-path: |
             out/*.rpm
             out/*.deb
+            out/systemd-lock-handler
 
-      - name: Create GitHub Release
+      - name: Create GitHub release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
         with:
           tag_name: v${{ steps.release_number.outputs.release_number }}
           name: v${{ steps.release_number.outputs.release_number }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ github.ref_name }}
           files: out/*
           body: |
             Release #${{ steps.release_number.outputs.release_number }}
 
-            Built with:
-            - Go version: ${{ needs.check-updates.outputs.latest_go }}
-            - coreos/go-systemd: ${{ needs.check-updates.outputs.latest_sysd }}
-            - godbus/dbus: ${{ needs.check-updates.outputs.latest_dbus }}
-            - golang.org/x/sys: ${{ needs.check-updates.outputs.latest_sys }}
-
+            ### Updated Infrastructure Changes:
+            ${{ needs.check-updates.outputs.release_body }}
