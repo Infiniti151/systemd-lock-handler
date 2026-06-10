@@ -23,24 +23,33 @@ A systemd user service to handle lock/unlock events.
 %autosetup
 echo "=== Extracted Source Tarball ==="
 
-mkdir -p ./go-home
-
 %ifarch x86_64
-echo "=== Fetching Go (%{_arch}) version %{target_go_ver} ==="
-curl -sL "https://go.dev/dl/%{target_go_ver}.linux-amd64.tar.gz" -o go-amd64.tar.gz
-tar -C ./go-home -xf go-amd64.tar.gz
-echo "=== Extracted Go (%{_arch}) Tarball ==="
-%endif
+echo "=== Fetching Pre-built x64 Binary from GitHub Releases ==="
+curl -sL "%{url}/releases/download/v%{version}/%{name}" -o %{name}
 
-%ifarch aarch64
-echo "=== Fetching Go (%{_arch}) version %{target_go_ver} ==="
+if ! file %{name} | grep -q "ELF.*x86-64"; then
+    echo "ERROR: Downloaded file is not a valid x86_64 ELF binary!"
+    cat %{name}
+    exit 1
+fi
+chmod +x %{name}
+
+%else
+echo "=== Fetching Go version %{target_go_ver} for ARM64 ==="
+mkdir -p ./go-home
 curl -sL "https://go.dev/dl/%{target_go_ver}.linux-arm64.tar.gz" -o go-arm64.tar.gz
 tar -C ./go-home -xf go-arm64.tar.gz
-echo "=== Extracted Go (%{_arch}) Tarball ==="
+echo "=== Extracted Go Tarball ==="
 %endif
 
 %build
 echo "=*=*=*> Running Build Phase <*=*=*="
+
+%ifarch x86_64
+echo "=== Skipping Compilation for x86_64 (Using GitHub Release Asset) ==="
+
+%else
+echo "=== Compiling from Source for %{_arch} ==="
 GO_BIN=$(pwd)/go-home/go/bin/go
 
 if [ ! -x "$GO_BIN" ]; then
@@ -59,11 +68,16 @@ $GO_BIN env
 echo "=== Building %{name} ==="
 
 $GO_BIN build -ldflags '-s -w' -o %{name} main.go
+%endif
 
 sed "s|{{BIN_PATH}}|%{_bindir}/%{name}|g" dist/%{name}.service > dist/%{name}.service.ready
 
 %check
 echo "=*=*=*> Running Check Phase <*=*=*="
+%ifarch x86_64
+echo "=== Skipping Tests for x86_64 (Pre-verified on GitHub Actions) ==="
+
+%else
 GO_BIN=$(pwd)/go-home/go/bin/go
 export GOTOOLCHAIN=local
 
@@ -72,6 +86,7 @@ $GO_BIN list .
 
 echo "=== Running Tests ==="
 $GO_BIN test -v .
+%endif
 
 %install
 echo "=*=*=*> Running Install Phase <*=*=*="
