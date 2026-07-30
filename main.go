@@ -17,6 +17,8 @@ import (
 
 var lastTriggerTime time.Time
 var isSleeping atomic.Int32
+var resumeCooldown = time.Now()
+var allTargets = []string{"lock.target", "unlock.target", "sleep.target", "wake.target"}
 
 const cooldown = 2 * time.Second
 
@@ -48,6 +50,23 @@ func SafeTrigger(target string) error {
 
 	lastTriggerTime = time.Now()
 	return StartSystemdUserUnit(target)
+}
+
+func TriggerExclusive(targetToStart string) error {
+	info("Exclusive Trigger: Starting %s and stopping others", targetToStart)
+
+	// Stop all others
+	for _, t := range allTargets {
+		if t != targetToStart {
+			go func(unit string) {
+				if err := StopSystemdUserUnit(unit); err != nil {
+					errorLog("Failed to stop %s: %v", unit, err)
+				}
+			}(t)
+		}
+	}
+
+	return StartSystemdUserUnit(targetToStart)
 }
 
 func StartSystemdUserUnit(unitName string) error {
@@ -93,7 +112,7 @@ func StopSystemdUserUnit(unitName string) error {
 	return fmt.Errorf("failed to stop unit %s: %v", unitName, result)
 }
 
-func ListenForSleep(triggerUnit bool) {
+func ListenForSleep(triggerSleep bool, triggerWake bool) {
 	conn, err := dbus.ConnectSystemBus()
 	if err != nil {
 		fatal("Could not connect to the system D-Bus: %v", err)
@@ -117,34 +136,34 @@ func ListenForSleep(triggerUnit bool) {
 		for {
 			lock, _ := logind.Inhibit("sleep", "systemd-lock-handler", "Filter lock events", "delay")
 
+			// SLEEP PHASE
 			if err := waitPrepareForSleep(c, true); err != nil {
 				return
 			}
 
-			isSleeping.Store(1)
-
-			if triggerUnit {
-				info("Action: Triggering sleep.target")
-				SafeTrigger("sleep.target")
+			if triggerSleep {
+				isSleeping.Store(1)
+				info("Action: Suspending")
+				TriggerExclusive("sleep.target")
 			}
 
 			lock.Close()
 
+			// WAKE PHASE
 			if err := waitPrepareForSleep(c, false); err != nil {
 				return
 			}
 
-			if triggerUnit {
-				info("Action: Stopping sleep.target")
-				StopSystemdUserUnit("sleep.target")
+			if triggerWake {
+				info("Action: Resuming")
+				resumeCooldown = time.Now()
+				if err := TriggerExclusive("wake.target"); err != nil {
+					errorLog("Sleep Handler: Failed to trigger exclusive wake: %v", err)
+				}
 			}
 
-			info("System resumed.")
-
-			time.AfterFunc(1200*time.Millisecond, func() {
-				isSleeping.Store(0)
-				info("Internal state: READY")
-			})
+			isSleeping.Store(0)
+			info("Internal state: READY")
 		}
 	}()
 }
@@ -169,7 +188,7 @@ func waitPrepareForSleep(c <-chan *dbus.Signal, want bool) error {
 	return fmt.Errorf("signal channel closed")
 }
 
-func StartUnifiedMonitor(sessionPath dbus.ObjectPath, doLock bool, doUnlock bool, blockSleepLock bool) {
+func StartUnifiedMonitor(sessionPath dbus.ObjectPath, doLock bool, doUnlock bool) {
 	go func() {
 		conn, err := dbus.ConnectSystemBus()
 		if err != nil {
@@ -210,26 +229,32 @@ func StartUnifiedMonitor(sessionPath dbus.ObjectPath, doLock bool, doUnlock bool
 
 			if variant, exists := props["LockedHint"]; exists {
 				isLocked, ok := variant.Value().(bool)
-				if blockSleepLock && isSleeping.Load() == 1 {
-					info("Ignoring LockedHint change (System is in Sleep/Resume transition)")
+
+				if !ok || isLocked == lastLocked {
 					continue
 				}
 
-				if !ok || isLocked == lastLocked {
+				if isSleeping.Load() == 1 {
+					info("Monitor: Ignoring LockedHint (System state is BUSY)")
+					continue
+				}
+
+				if time.Since(resumeCooldown) < 3*time.Second {
+					info("Monitor: Ignoring LockedHint (Within resume cooldown)")
 					continue
 				}
 
 				lastLocked = isLocked
 
 				if isLocked && doLock {
-					info("Action: Detected Lock (LockedHint=true)")
-					if err := SafeTrigger("lock.target"); err != nil {
-						errorLog("Monitor: %v", err)
+					info("Action: Locking")
+					if err := TriggerExclusive("lock.target"); err != nil {
+						errorLog("Monitor: Failed to lock: %v", err)
 					}
 				} else if !isLocked && doUnlock {
-					info("Action: Detected Unlock (LockedHint=false)")
-					if err := SafeTrigger("unlock.target"); err != nil {
-						errorLog("Monitor: %v", err)
+					info("Action: Unlocking")
+					if err := TriggerExclusive("unlock.target"); err != nil {
+						errorLog("Monitor: Failed to unlock: %v", err)
 					}
 				}
 			}
@@ -291,10 +316,10 @@ func GetActiveGraphicalSession(u *user.User) dbus.ObjectPath {
 }
 
 func main() {
-	handleSleep := flag.Bool("sleep", true, "Suspend/resume detection (sleep.target)")
+	handleSleep := flag.Bool("sleep", true, "User-level suspend detection (sleep.target)")
+	handleWake := flag.Bool("wake", true, "User-level resume detection (wake.target)")
 	handleLock := flag.Bool("lock", true, "Lock detection (lock.target)")
 	handleUnlock := flag.Bool("unlock", true, "Unlock detection (unlock.target)")
-	blockSleepLock := flag.Bool("block-sleep-lock", false, "Filter out lock/unlock events caused by suspend/resume")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
@@ -310,9 +335,9 @@ func main() {
 		defaultValue bool
 	}{
 		{"Sleep detection", *handleSleep, true},
+		{"Wake detection", *handleWake, true},
 		{"Lock detection", *handleLock, true},
 		{"Unlock detection", *handleUnlock, true},
-		{"Sleep-lock filtering", *blockSleepLock, false},
 	}
 
 	for _, cfg := range configs {
@@ -338,12 +363,12 @@ func main() {
 		fatal("No active graphical session found for user %s", currUser.Username)
 	}
 
-	if *handleSleep || *blockSleepLock {
-		ListenForSleep(*handleSleep)
+	if *handleSleep || *handleWake {
+		ListenForSleep(*handleSleep, *handleWake)
 	}
 
 	if *handleLock || *handleUnlock {
-		StartUnifiedMonitor(sessionPath, *handleLock, *handleUnlock, *blockSleepLock)
+		StartUnifiedMonitor(sessionPath, *handleLock, *handleUnlock)
 	}
 
 	info("Initialization complete. Running for user: %s", currUser.Username)

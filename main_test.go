@@ -248,49 +248,23 @@ func TestLoggingPrefixes(t *testing.T) {
 	}
 }
 
-func TestSleepStateToggle(t *testing.T) {
+func TestIsSleepingStateTracking(t *testing.T) {
 	t.Run("Verify Atomic State Lifecycle", func(t *testing.T) {
+		// Reset state
 		isSleeping.Store(0)
 
+		// Simulate Sleep Phase
 		isSleeping.Store(1)
 		if isSleeping.Load() != 1 {
-			t.Error("❌ FAIL: State should be BUSY (1) during suspend")
+			t.Error("❌ FAIL: State should be 1 during sleep")
 		}
 
+		// Simulate Resume Phase
 		isSleeping.Store(0)
 		if isSleeping.Load() != 0 {
-			t.Error("❌ FAIL: State should be READY (0) after resume")
+			t.Error("❌ FAIL: State should be 0 after resume")
 		}
-
-		t.Log("✅ PASS: isSleeping atomic correctly tracks hardware cycle")
 	})
-}
-
-func TestBlockSleepLockFiltering(t *testing.T) {
-	tests := []struct {
-		name        string
-		triggerUnit bool
-		shouldCall  bool
-	}{
-		{"Flag True: Should Trigger", true, true},
-		{"Flag False: Should Skip", false, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			wasTriggered := false
-
-			if tt.triggerUnit {
-				wasTriggered = true
-			}
-
-			if wasTriggered != tt.shouldCall {
-				t.Errorf("❌ FAIL [%s]: expected call state %v, got %v", tt.name, tt.shouldCall, wasTriggered)
-			} else {
-				t.Logf("✅ PASS: Flag %v correctly resulted in call: %v", tt.triggerUnit, wasTriggered)
-			}
-		})
-	}
 }
 
 func TestStopSystemdUserUnit(t *testing.T) {
@@ -304,34 +278,22 @@ func TestStopSystemdUserUnit(t *testing.T) {
 	})
 }
 
-func TestSleepLogicFlow(t *testing.T) {
-	t.Run("Verify Flag Respect", func(t *testing.T) {
-		triggerUnit := false
-		actionPerformed := false
+func TestTriggerExclusiveTargets(t *testing.T) {
+	t.Run("Verify AllTargets Definition", func(t *testing.T) {
+		// Ensure all four targets exist in the global slice
+		expectedTargets := []string{"lock.target", "unlock.target", "sleep.target", "wake.target"}
 
-		if triggerUnit {
-			actionPerformed = true
+		for _, et := range expectedTargets {
+			found := false
+			for _, at := range allTargets {
+				if at == et {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("❌ FAIL: Target %s missing from allTargets", et)
+			}
 		}
-
-		if actionPerformed {
-			t.Error("❌ FAIL: Action performed even though triggerUnit was false")
-		} else {
-			t.Log("✅ PASS: Logic correctly respected the triggerUnit=false flag")
-		}
-	})
-}
-
-func TestStopUnitContextImplementation(t *testing.T) {
-	t.Run("Verify StopUnit Parameters", func(t *testing.T) {
-		unit := "sleep.target"
-		mode := "replace"
-
-		if mode != "replace" {
-			t.Errorf("❌ FAIL: Expected mode 'replace', got '%s'", mode)
-		}
-		if !strings.HasSuffix(unit, ".target") {
-			t.Errorf("❌ FAIL: Unit name %s should be a target", unit)
-		}
-		t.Log("✅ PASS: StopUnit parameters are correctly configured for mimicry")
 	})
 }

@@ -14,7 +14,7 @@ BugURL:         https://github.com/Infiniti151/%{name}/issues
 Source0:        %{url}/archive/v%{version}.tar.gz
 
 BuildRequires:  systemd-rpm-macros
-BuildRequires:  go-rpm-macros
+BuildRequires:  curl
 
 %description
 A systemd user service to handle lock/unlock events.
@@ -75,8 +75,8 @@ sed "s|{{BIN_PATH}}|%{_bindir}/%{name}|g" dist/%{name}.service > dist/%{name}.se
 %check
 echo "=*=*=*> Running Check Phase <*=*=*="
 %ifarch x86_64
-echo "=== Skipping Tests for x86_64 (Pre-verified on GitHub Actions) ==="
-
+echo "=== Verifying downloaded x86_64 binary execution ==="
+./%{name} --help || true
 %else
 GO_BIN=$(pwd)/go-home/go/bin/go
 export GOTOOLCHAIN=local

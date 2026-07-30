@@ -1,3 +1,4 @@
 [Unit]
-Conflicts=lock.target
 Description=Unlock the current session
+Conflicts=lock.target sleep.target wake.target
+

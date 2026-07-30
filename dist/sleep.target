@@ -2,3 +2,4 @@
 Description=User-level suspend
 DefaultDependencies=no
 StopWhenUnneeded=yes
+Conflicts=lock.target unlock.target wake.target

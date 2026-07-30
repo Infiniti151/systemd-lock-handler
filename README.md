@@ -80,17 +80,16 @@ The service itself must be enabled for the current user (for package installs):
 
     systemctl --user enable --now systemd-lock-handler.service
 
-Additionally, service files must be created and enabled for any service that
-should start when the system is locked.
+Additionally, service files must be created and enabled for any service that should start when state changes occur.
 
 For example, `enabling` this service file would run `swaylock` when `logind`
-locks the session and before the system goes to sleep:
+locks the session:
 
     [Unit]
     Description=Screen locker for Wayland
     # If swaylock exits cleanly, unlock the session:
     OnSuccess=unlock.target
-    # When lock.target is stopped, stops this too:
+    # When lock.target is stopped, stop this too:
     PartOf=lock.target
     # Delay lock.target until this service is ready:
     After=lock.target
@@ -107,58 +106,49 @@ locks the session and before the system goes to sleep:
     [Install]
     WantedBy=lock.target
 
-`PartOf=lock.target`: Use this for services that must stop the moment you unlock your screen, such as a "Do Not Disturb" mode or a script that pauses background syncs while you are away.
+### Target Binding Best Practices
 
-`PartOf=sleep.target`: Use this for services that must stop exactly when the system resumes, ensuring that "waking up" cleanup scripts (like ExecStop) fire the moment the hardware resumes.
+* `PartOf=lock.target`: Use this for services that must stop the moment you unlock your screen (or transition to sleep/wake), such as a "Do Not Disturb" mode or a script that pauses background syncs.
+* `PartOf=sleep.target`: Use this for pre-suspend tasks that should cleanly terminate once the state moves away from sleep.
+* `WantedBy=lock.target`: Services that trigger whenever the session locks (e.g., screen lockers, dimming keyboard LEDs, pausing media).
+* `WantedBy=unlock.target`: Services that run upon unlocking the screen (e.g., re-enabling dGPU power, refreshing notifications).
+* `WantedBy=sleep.target`: Pre-suspend services (e.g., saving session state or pausing sync routines before the kernel freezes).
+* `WantedBy=wake.target`: Post-resume tasks that execute as soon as the system resumes from sleep (e.g., reconnecting network drives, resetting Bluetooth adapters, restoring display states).
 
-`WantedBy=lock.target`: Use this for services that should start whenever the session becomes "In-Active" (the screen locks), such as darkening keyboard LEDs or pausing media players.
+## Target Triggers
 
-`WantedBy=unlock.target`: Use this for services that should start automatically the moment you unlock your screen, such as a script that re-enables your dGPU, refreshes your mail, or resumes background notifications.
-
-`WantedBy=sleep.target`: Use this for services that should only trigger during the transition to suspend, such as disabling a power-hungry peripheral or saving system state just before the kernel pauses.
-
-Automatic Cleanup: Unlike standard user targets, `sleep.target` is explicitly stopped by the handler upon resume. Services tied to it will run their `ExecStop` as soon as the system is resumed.
-
-## Locking
-
+### Locking
 Lock your session using `loginctl lock-session`.
+Starts `lock.target` and stops other targets.
 
-This will mark the session as locked, and start `lock.target` along with any
-services that are `WantedBy` it.
-
-## Unlocking
-
+### Unlocking
 Unlock your session using `loginctl unlock-session`.
+Starts `unlock.target` and stops `lock.target` (stopping any units with `PartOf=lock.target`).
 
-This will mark the session as unlocked, start `unlock.target`, and stop
-`lock.target`. 
-
-Service that are marked `PartOf=lock.target` will be stopped when `lock.target`
-stops.
-
-## Suspending
-
+### Suspending
 Sleep your device using `systemctl suspend`.
+Starts `sleep.target` before the kernel suspends the system and stops other active targets.
 
-This will start `sleep.target` along with any services that are `WantedBy` it.
-This will happen _before_ the system is suspended.
+### Resuming
+When the system resumes from suspend:
+Starts `wake.target` and stops `sleep.target` (stopping any units with `PartOf=sleep.target`). Transient lock/unlock events emitted by display managers during resume are automatically filtered out via an internal cooldown buffer.
 
 ## Detection Toggling
 
-Be default, detection for all events (sleep, lock, and unlock) is enabled. This detection can be toggled individually via flags. These flags need to be added using a config file.
+By default, detection for all events (`sleep`, `wake`, `lock`, and `unlock`) is enabled. D-Bus signal monitoring can be selectively disabled via CLI flags in a configuration file.
 
-| Flags | Function | Default |
+| Flag | Function | Default |
 | :--- | :----: | :----: |
-| `sleep` | Suspend/resume detection (`sleep.target`) | true |
-| `lock` | Lock detection (`lock.target`) | true |
-| `unlock` | Unlock detection (`unlock.target`) | true |
-| `block-sleep-lock` | Filter out lock/unlock events caused by suspend/resume | false |
+| `-sleep` | User-level suspend detection (`sleep.target`) | `true` |
+| `-wake` | User-level resume detection (`wake.target`) | `true` |
+| `-lock` | Lock detection (`lock.target`) | `true` |
+| `-unlock` | Unlock detection (`unlock.target`) | `true` |
 
-**Example of sleep detection turned off and sleep-lock filtering turned on:**
+**Example configuration (`~/.config/systemd-lock-handler.conf`):**
 
-Add flags by creating a config file `~/.config/systemd-lock-handler.conf`
-```
-FLAGS="-sleep=false -block-sleep-lock=true"
+To disable sleep/wake triggers and rely only on session locking:
+```ini
+FLAGS="-sleep=false -wake=false"
 ```
 
 Reload the daemon and restart the service:
@@ -167,5 +157,5 @@ systemctl --user daemon-reload
 systemctl --user restart systemd-lock-handler
 ```
 
-The detection status for all three events is shown in the service status (```systemctl --user status systemd-lock-handler```):
+The detection status for all four events is shown in the service status (```systemctl --user status systemd-lock-handler```):
 ![alt text](image.png)

@@ -63,7 +63,8 @@ install: build stage
 	sudo install -Dm644 $(DIST_DIR)/lock.target $(INSTALL_UNIT_DIR)/lock.target
 	sudo install -Dm644 $(DIST_DIR)/unlock.target $(INSTALL_UNIT_DIR)/unlock.target
 	sudo install -Dm644 $(DIST_DIR)/sleep.target $(INSTALL_UNIT_DIR)/sleep.target
-	
+	sudo install -Dm644 $(DIST_DIR)/wake.target $(INSTALL_UNIT_DIR)/wake.target
+
 	@printf "$(YELLOW)=== Reloading systemd user daemon and enabling service for $(ACTUAL_USER)... ===$(NC)\n"
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user daemon-reload
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user enable --now ${NAME}.service
@@ -73,12 +74,13 @@ uninstall:
 	@printf "$(YELLOW)=== Stopping and disabling ${NAME} services for $(ACTUAL_USER)... ===$(NC)\n"
 	-sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user stop ${NAME}.service lock.target unlock.target sleep.target
 	-sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user disable ${NAME}.service
-	
+
 	@printf "$(CYAN)=== Removing system files... ===$(NC)\n"
 	sudo rm -f $(INSTALL_UNIT_DIR)/${NAME}.service
 	sudo rm -f $(INSTALL_UNIT_DIR)/lock.target
 	sudo rm -f $(INSTALL_UNIT_DIR)/unlock.target
 	sudo rm -f $(INSTALL_UNIT_DIR)/sleep.target
+	sudo rm -f $(INSTALL_UNIT_DIR)/wake.target
 	sudo rm -f $(INSTALL_BIN_DIR)/${NAME}
 
 	@printf "$(CYAN)=== Cleaning up systemd state... ===$(NC)\n"
@@ -95,7 +97,7 @@ update:
 update-binary: build
 	@printf "$(CYAN)=== Updating ${NAME} binary only... ===$(NC)\n"
 	sudo install -Dm755 $(OUT_DIR)/${NAME} $(INSTALL_BIN_DIR)/${NAME}
-	
+
 	@printf "$(YELLOW)=== Reloading systemd user daemon and restarting service for $(ACTUAL_USER)... ===$(NC)\n"
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user daemon-reload
 	sudo -u $(ACTUAL_USER) $(USER_BUS) systemctl --user restart ${NAME}.service
@@ -120,13 +122,14 @@ fpm-packages: build stage
 			${DIST_DIR}/lock.target=$(REL_UNIT_DIR)/lock.target \
 			${DIST_DIR}/unlock.target=$(REL_UNIT_DIR)/unlock.target \
 			${DIST_DIR}/sleep.target=$(REL_UNIT_DIR)/sleep.target; \
+			${DIST_DIR}/wake.target=$(REL_UNIT_DIR)/wake.target; \
 	done
 	@printf "$(GREEN)=== Packaging complete. ===$(NC)\n"
 
 sign:
 	@printf "$(CYAN)=== Signing RPM package... ===$(NC)\n"
 	rpmsign --addsign ${OUT_DIR}/${NAME}-v${VERSION}.rpm
-	
+
 	@printf "$(CYAN)=== Signing Deb package... ===$(NC)\n"
 	debsigs --sign=origin --default-key="$(GPG_IDENTITY)" ${OUT_DIR}/${NAME}-v${VERSION}.deb
 
@@ -145,7 +148,7 @@ release: fpm-packages sign checksums publickey
 
 clean:
 	@printf "$(CYAN)=== Cleaning up build artifacts... ===$(NC)\n"
-	rm -rf $(OUT_DIR) $(DIST_DIR)/*.ready systemd-lock-handler{.spec,-copr.spec}
+	rm -rf $(OUT_DIR) $(DIST_DIR)/*.ready
 	@printf "$(GREEN)=== Clean complete. ===$(NC)\n"
 
 .PHONY: all test build stage install uninstall update update-binary fpm-packages sign checksums publickey release clean

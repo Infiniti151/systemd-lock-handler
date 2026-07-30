@@ -29,93 +29,115 @@ jobs:
       release_body: ${{ steps.check.outputs.release_body }}
 
     steps:
-      - name: Checkout code for push inspection
-        if: github.event_name == 'push'
+      - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Check latest versions
+      - name: Check latest versions & parse changelog
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          GO_MOD=$(curl -s "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/go.mod")
-
-          current_go=$(echo "$GO_MOD" | grep '^go ' | awk '{print $2}')
-          current_sysd=$(echo "$GO_MOD" | grep 'github.com/coreos/go-systemd' | awk '{print $2}')
-          current_dbus=$(echo "$GO_MOD" | grep 'github.com/godbus/dbus' | awk '{print $2}')
-          current_sys=$(echo "$GO_MOD" | grep 'golang.org/x/sys' | awk '{print $3}')
-
-          latest_go=$(curl -s https://go.dev/VERSION?m=text | head -n1 | sed 's/^go//')
-          latest_sysd=$(gh api repos/coreos/go-systemd/tags --jq '.[0].name')
-          latest_dbus=$(gh api repos/godbus/dbus/tags --jq '.[0].name')
-          latest_sys=$(curl -s https://proxy.golang.org/golang.org/x/sys/@latest | jq -r .Version)
-
-          if (( ${#latest_go} * ${#latest_sysd} * ${#latest_dbus} * ${#latest_sys} == 0 )); then
-            echo "::error::One or more latest version lookups failed (empty string)."
-            echo "Go: [$latest_go] Sysd: [$latest_sysd] Dbus: [$latest_dbus] Sys: [$latest_sys]"
-            exit 1
-          fi
-
-          GREEN='\e[32m'
-          RED='\e[31m'
-          BOLD='\e[1m'
-          RESET='\e[0m'
-          LINE="+----------------------+--------------+--------------+"
-          FMT="| %-20s | %-12s | %-12s |\n"
-
-          print_row() {
-              local color=$RED
-              [[ "$2" == "$3" ]] && color=$GREEN
-              printf "${color}${FMT}${RESET}" "$1" "$2" "$3"
-          }
-
-          echo -e "\n${BOLD}Dependency Update Check${RESET}"
-          echo "$LINE"
-          printf "${BOLD}${FMT}${RESET}" "NAME" "CURRENT" "LATEST"
-          echo "$LINE"
-          print_row "go" "$current_go" "$latest_go"
-          print_row "go-systemd" "$current_sysd" "$latest_sysd"
-          print_row "dbus" "$current_dbus" "$latest_dbus"
-          print_row "x/sys" "$current_sys" "$latest_sys"
-          echo -e "$LINE\n"
-
           BODY=""
+          NEEDS_UPDATE="false"
 
-          # 1. Parse Version-bump updates (Cron / Dispatch)
-          if [[ "$current_go" != "$latest_go" ]]; then
-            BODY="${BODY}- Upgraded Go compiler environment from **${current_go}** to **${latest_go}**\n"
-          fi
-          if [[ "$current_sysd" != "$latest_sysd" ]]; then
-            BODY="${BODY}- Updated \`coreos/go-systemd\` from **${current_sysd}** to **${latest_sysd}**\n"
-          fi
-          if [[ "$current_dbus" != "$latest_dbus" ]]; then
-            BODY="${BODY}- Updated \`godbus/dbus\` from **${current_dbus}** to **${latest_dbus}**\n"
-          fi
-          if [[ "$current_sys" != "$latest_sys" ]]; then
-            BODY="${BODY}- Updated \`x/sys\` from **${current_sys}** to **${latest_sys}**\n"
-          fi
-
-          # 2. Parse direct code updates (Push events)
+          # -------------------------------------------------------------
+          # 1. HANDLE PUSH EVENTS: Parse CHANGELOG.md if modified
+          # -------------------------------------------------------------
           if [[ "${{ github.event_name }}" == "push" ]]; then
-            # Verify exactly what files were altered in the push matrix commit
             CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} || true)
 
-            if echo "$CHANGED_FILES" | grep -q "main.go"; then
-              BODY="${BODY}- Updated logic in \`main.go\`\n"
+            if echo "$CHANGED_FILES" | grep -q "CHANGELOG.md"; then
+              BODY=$(awk '/^## \[/{count++; if (count==2) exit; next} count==1 && !/^$/' CHANGELOG.md)
             fi
-            if echo "$CHANGED_FILES" | grep -q "main_test.go"; then
-              BODY="${BODY}- Updated unit tests in \`main_test.go\`\n"
+
+            # Fallback if CHANGELOG.md was not edited during code push
+            if [[ -z "$BODY" ]]; then
+              if echo "$CHANGED_FILES" | grep -q "main.go"; then
+                BODY="${BODY}- Updated logic in \`main.go\`\n"
+              fi
+              if echo "$CHANGED_FILES" | grep -q "main_test.go"; then
+                BODY="${BODY}- Updated unit tests in \`main_test.go\`\n"
+              fi
+            fi
+
+          # -------------------------------------------------------------
+          # 2. HANDLE SCHEDULE / WORKFLOW_DISPATCH: Check dependency updates
+          # -------------------------------------------------------------
+          else
+            if [[ ! -f "go.mod" ]]; then
+              echo "::error::go.mod file not found in workspace."
+              exit 1
+            fi
+
+            current_go=$(grep -m1 '^go ' go.mod | awk '{print $2}')
+            current_sysd=$(grep 'github.com/coreos/go-systemd' go.mod | awk '{print $2}')
+            current_dbus=$(grep 'github.com/godbus/dbus' go.mod | awk '{print $2}')
+            current_sys=$(grep 'golang.org/x/sys' go.mod | awk '{print $3}')
+
+            latest_go=$(curl -s https://go.dev/VERSION?m=text | head -n1 | sed 's/^go//')
+            latest_sysd=$(gh api repos/coreos/go-systemd/tags --jq '.[0].name')
+            latest_dbus=$(gh api repos/godbus/dbus/tags --jq '.[0].name')
+            latest_sys=$(curl -s https://proxy.golang.org/golang.org/x/sys/@latest | jq -r .Version)
+
+            if (( ${#latest_go} * ${#latest_sysd} * ${#latest_dbus} * ${#latest_sys} == 0 )); then
+              echo "::error::One or more latest version lookups failed (empty string)."
+              echo "Go: [$latest_go] Sysd: [$latest_sysd] Dbus: [$latest_dbus] Sys: [$latest_sys]"
+              exit 1
+            fi
+
+            # --- Formatted Terminal Output ---
+            GREEN='\e[32m'
+            RED='\e[31m'
+            BOLD='\e[1m'
+            RESET='\e[0m'
+            LINE="+----------------------+--------------+--------------+"
+            FMT="| %-20s | %-12s | %-12s |\n"
+
+            print_row() {
+                local color=$RED
+                [[ "$2" == "$3" ]] && color=$GREEN
+                printf "${color}${FMT}${RESET}" "$1" "$2" "$3"
+            }
+
+            echo -e "\n${BOLD}Dependency Update Check${RESET}"
+            echo "$LINE"
+            printf "${BOLD}${FMT}${RESET}" "NAME" "CURRENT" "LATEST"
+            echo "$LINE"
+            print_row "go" "$current_go" "$latest_go"
+            print_row "go-systemd" "$current_sysd" "$latest_sysd"
+            print_row "dbus" "$current_dbus" "$latest_dbus"
+            print_row "x/sys" "$current_sys" "$latest_sys"
+            echo -e "$LINE\n"
+
+            if [[ "$current_go" != "$latest_go" ]]; then
+              BODY="${BODY}- Upgraded Go compiler environment from **${current_go}** to **${latest_go}**\n"
+            fi
+            if [[ "$current_sysd" != "$latest_sysd" ]]; then
+              BODY="${BODY}- Updated \`coreos/go-systemd\` from **${current_sysd}** to **${latest_sysd}**\n"
+            fi
+            if [[ "$current_dbus" != "$latest_dbus" ]]; then
+              BODY="${BODY}- Updated \`godbus/dbus\` from **${current_dbus}** to **${latest_dbus}**\n"
+            fi
+            if [[ "$current_sys" != "$latest_sys" ]]; then
+              BODY="${BODY}- Updated \`x/sys\` from **${current_sys}** to **${latest_sys}**\n"
+            fi
+
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "$BODY" ]]; then
+              BODY="- Manual workflow build execution pipeline trigger. Dependency trees remained up to date.\n"
+            fi
+
+            if [[ "$current_go$current_sysd$current_dbus$current_sys" != "$latest_go$latest_sysd$latest_dbus$latest_sys" ]]; then
+              NEEDS_UPDATE="true"
             fi
           fi
 
-          # 3. Fallback for manual workflow_dispatch runs with no version updates
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "$BODY" ]]; then
-            BODY="- Manual workflow build execution pipeline trigger. Dependency trees remained up to date.\n"
-          fi
-
+          # -------------------------------------------------------------
+          # 3. SINGLE UNIFIED OUTPUT BLOCK
+          # -------------------------------------------------------------
           {
+            echo "needs_update=$NEEDS_UPDATE"
             echo "current_go=$current_go"
             echo "latest_go=$latest_go"
             echo "current_sysd=$current_sysd"
@@ -124,13 +146,6 @@ jobs:
             echo "latest_dbus=$latest_dbus"
             echo "current_sys=$current_sys"
             echo "latest_sys=$latest_sys"
-
-            if [[ "$current_go$current_sysd$current_dbus$current_sys" != "$latest_go$latest_sysd$latest_dbus$latest_sys" ]]; then
-              echo "needs_update=true"
-            else
-              echo "needs_update=false"
-            fi
-
             echo "release_body<<EOF"
             echo -e "$BODY"
             echo "EOF"
@@ -148,6 +163,8 @@ jobs:
       id-token: write
       attestations: write
       artifact-metadata: write
+    outputs:
+      release_number: ${{ steps.release_number.outputs.release_number }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -175,11 +192,11 @@ jobs:
           CURRENT_SYS: ${{ needs.check-updates.outputs.current_sys }}
           LATEST_SYS: ${{ needs.check-updates.outputs.latest_sys }}
         run: |
-          if [ "$CURRENT_GO" != "$LATEST_GO" ]; then
+          if [ "$CURRENT_GO" != "$LATEST_GO" ] && [ -n "$LATEST_GO" ]; then
             go mod edit -go="$LATEST_GO"
           fi
 
-          if [ "$CURRENT_SYSD" != "$LATEST_SYSD" ]; then
+          if [ "$CURRENT_SYSD" != "$LATEST_SYSD" ] && [ -n "$LATEST_SYSD" ]; then
             OLD_SYSD_MAJOR="${CURRENT_SYSD%%.*}"
             NEW_SYSD_MAJOR="${LATEST_SYSD%%.*}"
             if [ "$OLD_SYSD_MAJOR" != "$NEW_SYSD_MAJOR" ]; then
@@ -188,7 +205,7 @@ jobs:
             go get -u "github.com/coreos/go-systemd/${NEW_SYSD_MAJOR}@${LATEST_SYSD}"
           fi
 
-          if [ "$CURRENT_DBUS" != "$LATEST_DBUS" ]; then
+          if [ "$CURRENT_DBUS" != "$LATEST_DBUS" ] && [ -n "$LATEST_DBUS" ]; then
             OLD_DBUS_MAJOR="${CURRENT_DBUS%%.*}"
             NEW_DBUS_MAJOR="${LATEST_DBUS%%.*}"
             if [ "$OLD_DBUS_MAJOR" != "$NEW_DBUS_MAJOR" ]; then
@@ -197,7 +214,7 @@ jobs:
             go get -u "github.com/godbus/dbus/${NEW_DBUS_MAJOR}@${LATEST_DBUS}"
           fi
 
-          if [ "$CURRENT_SYS" != "$LATEST_SYS" ]; then
+          if [ "$CURRENT_SYS" != "$LATEST_SYS" ] && [ -n "$LATEST_SYS" ]; then
             go get -u "golang.org/x/sys@${LATEST_SYS}"
           fi
 
@@ -216,6 +233,31 @@ jobs:
 
           echo "release_number=$NEXT_NUM" >> "$GITHUB_OUTPUT"
           echo "Next release number: $NEXT_NUM"
+
+      - name: Write generated changelog to CHANGELOG.md (Cron / Dispatch)
+        if: github.event_name != 'push'
+        env:
+          RAW_BODY: ${{ needs.check-updates.outputs.release_body }}
+          RELEASE_NUMBER: ${{ steps.release_number.outputs.release_number }}
+        run: |
+          DATE_STR=$(date "+%Y-%m-%d")
+          EXPANDED_BODY=$(printf "%b" "$RAW_BODY" | sed '/^$/d')
+
+          ENTRY="## [${RELEASE_NUMBER}] - ${DATE_STR}\n${EXPANDED_BODY}\n"
+
+          if [[ -f CHANGELOG.md ]]; then
+            awk -v entry="$ENTRY" '
+              /^# Changelog/ {
+                print $0 "\n\n" entry;
+                next
+              }
+              NR==2 && /^$/ { next }
+              { print }
+            ' CHANGELOG.md > CHANGELOG.tmp
+            mv CHANGELOG.tmp CHANGELOG.md
+          else
+            echo -e "# Changelog\n\n${ENTRY}" > CHANGELOG.md
+          fi
 
       - name: Run tests
         run: |
@@ -236,7 +278,9 @@ jobs:
           CLEAN_BODY=$(echo "$EXPANDED_TEXT" | sed -e 's/\\//g' -e 's/\*//g')
 
           sed -i "s/^Version:[[:space:]]*.*/Version:        ${RELEASE_NUMBER}/" systemd-lock-handler.spec
-          sed -i "s/^%global target_go_ver.*/%global target_go_ver ${TARGET_GO}/" systemd-lock-handler.spec
+          if [ -n "$TARGET_GO" ]; then
+            sed -i "s/^%global target_go_ver.*/%global target_go_ver ${TARGET_GO}/" systemd-lock-handler.spec
+          fi
 
           cat <<EOF > changelog.tmp
           $CHLOG_HDR
@@ -298,7 +342,51 @@ jobs:
           target_commitish: ${{ github.ref_name }}
           files: out/*
           body: |
-            Release #${{ steps.release_number.outputs.release_number }}
-
-            ### Updated Infrastructure Changes:
+            ### Release Notes:
             ${{ needs.check-updates.outputs.release_body }}
+
+  trigger-copr:
+    needs: [check-updates, build-release]
+    if: |
+      always() &&
+      needs.build-release.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger COPR Build via API
+        env:
+          COPR_WEBHOOK_URL: ${{ secrets.COPR_PACKAGE_WEBHOOK_URL }}
+          RELEASE_NUMBER: ${{ needs.build-release.outputs.release_number }}
+        run: |
+          if [ -z "$COPR_WEBHOOK_URL" ]; then
+            echo "::error::COPR_PACKAGE_WEBHOOK_URL secret is not set! Cannot trigger build."
+            exit 1
+          fi
+
+          echo "Triggering COPR build for release v${RELEASE_NUMBER}..."
+
+          MAX_RETRIES=3
+          DELAY=5
+          SUCCESS=false
+
+          for ((i=1; i<=MAX_RETRIES; i++)); do
+            echo "Attempt $i of $MAX_RETRIES..."
+
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$COPR_WEBHOOK_URL")
+
+            if [[ "$HTTP_STATUS" =~ ^2[0-9]{2}$ ]]; then
+              echo "Successfully triggered COPR build (HTTP $HTTP_STATUS)."
+              SUCCESS=true
+              break
+            else
+              echo "::warning::Attempt $i failed with HTTP status: $HTTP_STATUS"
+              if [ $i -lt $MAX_RETRIES ]; then
+                echo "Retrying in ${DELAY} seconds..."
+                sleep $DELAY
+              fi
+            fi
+          done
+
+          if [ "$SUCCESS" = false ]; then
+            echo "::error::Failed to trigger COPR build after $MAX_RETRIES attempts."
+            exit 1
+          fi
