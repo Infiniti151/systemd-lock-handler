@@ -385,14 +385,12 @@ jobs:
           for ((i=1; i<=MAX_RETRIES; i++)); do
             echo "Attempt $i of $MAX_RETRIES..."
 
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$COPR_WEBHOOK_URL")
-
-            if [[ "$HTTP_STATUS" =~ ^2[0-9]{2}$ ]]; then
-              echo "Successfully triggered COPR build (HTTP $HTTP_STATUS)."
+            if curl -fsSL -X POST "$COPR_WEBHOOK_URL"; then
+              echo "Successfully triggered COPR build!"
               SUCCESS=true
               break
             else
-              echo "::warning::Attempt $i failed with HTTP status: $HTTP_STATUS"
+              echo "::warning::Attempt $i failed to reach COPR webhook."
               if [ $i -lt $MAX_RETRIES ]; then
                 echo "Retrying in ${DELAY} seconds..."
                 sleep $DELAY
