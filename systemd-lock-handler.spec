@@ -80,6 +80,7 @@ echo "=== Verifying downloaded x86_64 binary execution ==="
 %else
 GO_BIN=$(pwd)/go-home/go/bin/go
 export GOTOOLCHAIN=local
+export CGO_ENABLED=0
 
 echo "=== Package List ==="
 $GO_BIN list .
