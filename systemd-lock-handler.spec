@@ -37,7 +37,7 @@ chmod +x %{name}
 %else
 echo "=== Fetching Go version %{target_go_ver} for ARM64 ==="
 mkdir -p ./go-home
-curl -sL "https://go.dev/dl/%{target_go_ver}.linux-arm64.tar.gz" -o go-arm64.tar.gz
+curl -sL "https://go.dev/dl/go%{target_go_ver}.linux-arm64.tar.gz" -o go-arm64.tar.gz
 tar -C ./go-home -xf go-arm64.tar.gz
 echo "=== Extracted Go Tarball ==="
 %endif
