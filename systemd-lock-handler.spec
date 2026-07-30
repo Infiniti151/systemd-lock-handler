@@ -4,7 +4,7 @@
 %global target_go_ver 1.26.5
 
 Name:           systemd-lock-handler
-Version:        16
+Version:        17
 Release:        %autorelease
 Summary:        Systemd user service for lock/unlock events
 License:        ISC
@@ -131,6 +131,11 @@ echo "=*=*=*> Finished Install Phase - Moving to File Manifest <*=*=*="
 %systemd_user_postun %{name}.service
 
 %changelog
+* Thu Jul 30 2026 Infiniti151 <43163551+Infiniti151@users.noreply.github.com> - 17-1
+- Added `wake.target` for handling post-resume tasks
+- Refactored target state transitions to use exclusive target switching
+- Updated release workflow to extract notes from `CHANGELOG.md` and trigger COPR builds
+
 * Thu Jul 09 2026 Infiniti151 <43163551+Infiniti151@users.noreply.github.com> - 16-1
 - Updated `x/sys` from v0.46.0 to v0.47.0
 
