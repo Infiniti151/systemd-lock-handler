@@ -121,7 +121,7 @@ fpm-packages: build stage
 			${DIST_DIR}/${NAME}.service.ready=$(REL_UNIT_DIR)/${NAME}.service \
 			${DIST_DIR}/lock.target=$(REL_UNIT_DIR)/lock.target \
 			${DIST_DIR}/unlock.target=$(REL_UNIT_DIR)/unlock.target \
-			${DIST_DIR}/sleep.target=$(REL_UNIT_DIR)/sleep.target; \
+			${DIST_DIR}/sleep.target=$(REL_UNIT_DIR)/sleep.target \
 			${DIST_DIR}/wake.target=$(REL_UNIT_DIR)/wake.target; \
 	done
 	@printf "$(GREEN)=== Packaging complete. ===$(NC)\n"
