@@ -32,7 +32,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 2
 
       - name: Check latest versions & parse changelog
         id: check
@@ -43,7 +43,31 @@ jobs:
           NEEDS_UPDATE="false"
 
           # -------------------------------------------------------------
-          # 1. HANDLE PUSH EVENTS: Parse CHANGELOG.md if modified
+          # 1. ALWAYS PARSE LOCAL GO.MOD (Guarantees outputs exist for all events)
+          # -------------------------------------------------------------
+          if [[ ! -f "go.mod" ]]; then
+            echo "::error::go.mod file not found in workspace."
+            exit 1
+          fi
+
+          current_go=$(grep -m1 '^go ' go.mod | awk '{print $2}')
+          current_sysd=$(grep 'github.com/coreos/go-systemd' go.mod | awk '{print $2}')
+          current_dbus=$(grep 'github.com/godbus/dbus' go.mod | awk '{print $2}')
+          current_sys=$(grep 'golang.org/x/sys' go.mod | awk '{print $3}')
+
+          latest_go=$(curl -s https://go.dev/VERSION?m=text | head -n1 | sed 's/^go//')
+          latest_sysd=$(gh api repos/coreos/go-systemd/tags --jq '.[0].name')
+          latest_dbus=$(gh api repos/godbus/dbus/tags --jq '.[0].name')
+          latest_sys=$(curl -s https://proxy.golang.org/golang.org/x/sys/@latest | jq -r .Version)
+
+          if (( ${#latest_go} * ${#latest_sysd} * ${#latest_dbus} * ${#latest_sys} == 0 )); then
+            echo "::error::One or more latest version lookups failed (empty string)."
+            echo "Go: [$latest_go] Sysd: [$latest_sysd] Dbus: [$latest_dbus] Sys: [$latest_sys]"
+            exit 1
+          fi
+
+          # -------------------------------------------------------------
+          # 2. HANDLE PUSH EVENTS: Parse CHANGELOG.md if modified
           # -------------------------------------------------------------
           if [[ "${{ github.event_name }}" == "push" ]]; then
             CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} || true)
@@ -63,30 +87,9 @@ jobs:
             fi
 
           # -------------------------------------------------------------
-          # 2. HANDLE SCHEDULE / WORKFLOW_DISPATCH: Check dependency updates
+          # 3. HANDLE SCHEDULE / WORKFLOW_DISPATCH: Check dependency updates
           # -------------------------------------------------------------
           else
-            if [[ ! -f "go.mod" ]]; then
-              echo "::error::go.mod file not found in workspace."
-              exit 1
-            fi
-
-            current_go=$(grep -m1 '^go ' go.mod | awk '{print $2}')
-            current_sysd=$(grep 'github.com/coreos/go-systemd' go.mod | awk '{print $2}')
-            current_dbus=$(grep 'github.com/godbus/dbus' go.mod | awk '{print $2}')
-            current_sys=$(grep 'golang.org/x/sys' go.mod | awk '{print $3}')
-
-            latest_go=$(curl -s https://go.dev/VERSION?m=text | head -n1 | sed 's/^go//')
-            latest_sysd=$(gh api repos/coreos/go-systemd/tags --jq '.[0].name')
-            latest_dbus=$(gh api repos/godbus/dbus/tags --jq '.[0].name')
-            latest_sys=$(curl -s https://proxy.golang.org/golang.org/x/sys/@latest | jq -r .Version)
-
-            if (( ${#latest_go} * ${#latest_sysd} * ${#latest_dbus} * ${#latest_sys} == 0 )); then
-              echo "::error::One or more latest version lookups failed (empty string)."
-              echo "Go: [$latest_go] Sysd: [$latest_sysd] Dbus: [$latest_dbus] Sys: [$latest_sys]"
-              exit 1
-            fi
-
             # --- Formatted Terminal Output ---
             GREEN='\e[32m'
             RED='\e[31m'
@@ -134,7 +137,7 @@ jobs:
           fi
 
           # -------------------------------------------------------------
-          # 3. SINGLE UNIFIED OUTPUT BLOCK
+          # 4. SINGLE UNIFIED OUTPUT BLOCK (Outputs always defined)
           # -------------------------------------------------------------
           {
             echo "needs_update=$NEEDS_UPDATE"
