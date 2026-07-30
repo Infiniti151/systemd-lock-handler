@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       needs_update: ${{ steps.check.outputs.needs_update }}
+      changelog_exists: ${{ steps.check.outputs.changelog_exists }}
       current_go: ${{ steps.check.outputs.current_go }}
       latest_go: ${{ steps.check.outputs.latest_go }}
       current_sysd: ${{ steps.check.outputs.current_sysd }}
@@ -29,10 +30,10 @@ jobs:
       release_body: ${{ steps.check.outputs.release_body }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Check latest versions & parse changelog
         id: check
@@ -43,7 +44,7 @@ jobs:
           NEEDS_UPDATE="false"
 
           # -------------------------------------------------------------
-          # 1. ALWAYS PARSE LOCAL GO.MOD (Guarantees outputs exist for all events)
+          # 1. PARSE LOCAL GO.MOD & FETCH LATEST DEPENDENCIES
           # -------------------------------------------------------------
           if [[ ! -f "go.mod" ]]; then
             echo "::error::go.mod file not found in workspace."
@@ -67,53 +68,52 @@ jobs:
           fi
 
           # -------------------------------------------------------------
-          # 2. HANDLE PUSH EVENTS: Parse CHANGELOG.md if modified
+          # 2. PRINT TERMINAL SUMMARY TABLE
           # -------------------------------------------------------------
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} || true)
+          GREEN='\e[32m'
+          RED='\e[31m'
+          BOLD='\e[1m'
+          RESET='\e[0m'
+          LINE="+----------------------+--------------+--------------+"
+          FMT="| %-20s | %-12s | %-12s |\n"
 
-            if echo "$CHANGED_FILES" | grep -q "CHANGELOG.md"; then
-              BODY=$(awk '/^## \[/{count++; if (count==2) exit; next} count==1 && !/^$/' CHANGELOG.md)
-            fi
+          print_row() {
+              local color=$RED
+              [[ "$2" == "$3" ]] && color=$GREEN
+              printf "${color}${FMT}${RESET}" "$1" "$2" "$3"
+          }
 
-            # Fallback if CHANGELOG.md was not edited during code push
-            if [[ -z "$BODY" ]]; then
-              if echo "$CHANGED_FILES" | grep -q "main.go"; then
-                BODY="${BODY}- Updated logic in \`main.go\`\n"
-              fi
-              if echo "$CHANGED_FILES" | grep -q "main_test.go"; then
-                BODY="${BODY}- Updated unit tests in \`main_test.go\`\n"
-              fi
-            fi
+          echo -e "\n${BOLD}Dependency Update Check${RESET}"
+          echo "$LINE"
+          printf "${BOLD}${FMT}${RESET}" "NAME" "CURRENT" "LATEST"
+          echo "$LINE"
+          print_row "go" "$current_go" "$latest_go"
+          print_row "go-systemd" "$current_sysd" "$latest_sysd"
+          print_row "dbus" "$current_dbus" "$latest_dbus"
+          print_row "x/sys" "$current_sys" "$latest_sys"
+          echo -e "$LINE\n"
 
           # -------------------------------------------------------------
-          # 3. HANDLE SCHEDULE / WORKFLOW_DISPATCH: Check dependency updates
+          # 3. COMPARE LATEST TAG VS CHANGELOG VERSION
           # -------------------------------------------------------------
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          LATEST_TAG_CLEAN=${LATEST_TAG#v}
+
+          CHANGELOG_VER=""
+          CHANGELOG_EXISTS="false"
+          if [[ -f "CHANGELOG.md" ]]; then
+            # Extract first version inside brackets e.g. ## [1.2.3]
+            CHANGELOG_VER=$(grep -m1 -oP '^## \[\K[^\]]+' CHANGELOG.md || true)
+          fi
+
+          if [[ -n "$CHANGELOG_VER" && "$CHANGELOG_VER" != "$LATEST_TAG_CLEAN" ]]; then
+            # New version present in CHANGELOG -> extract top entry
+            BODY=$(awk '/^## \[/{count++; if (count==2) exit; next} count==1 && !/^$/' CHANGELOG.md)
+            NEEDS_UPDATE="true"
+            CHANGELOG_EXISTS="true"
           else
-            # --- Formatted Terminal Output ---
-            GREEN='\e[32m'
-            RED='\e[31m'
-            BOLD='\e[1m'
-            RESET='\e[0m'
-            LINE="+----------------------+--------------+--------------+"
-            FMT="| %-20s | %-12s | %-12s |\n"
-
-            print_row() {
-                local color=$RED
-                [[ "$2" == "$3" ]] && color=$GREEN
-                printf "${color}${FMT}${RESET}" "$1" "$2" "$3"
-            }
-
-            echo -e "\n${BOLD}Dependency Update Check${RESET}"
-            echo "$LINE"
-            printf "${BOLD}${FMT}${RESET}" "NAME" "CURRENT" "LATEST"
-            echo "$LINE"
-            print_row "go" "$current_go" "$latest_go"
-            print_row "go-systemd" "$current_sysd" "$latest_sysd"
-            print_row "dbus" "$current_dbus" "$latest_dbus"
-            print_row "x/sys" "$current_sys" "$latest_sys"
-            echo -e "$LINE\n"
-
+            # CHANGELOG matches latest tag (no new release notes explicitly added)
+            # Check dependency diffs
             if [[ "$current_go" != "$latest_go" ]]; then
               BODY="${BODY}- Upgraded Go compiler environment from **${current_go}** to **${latest_go}**\n"
             fi
@@ -127,20 +127,31 @@ jobs:
               BODY="${BODY}- Updated \`x/sys\` from **${current_sys}** to **${latest_sys}**\n"
             fi
 
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "$BODY" ]]; then
-              BODY="- Manual workflow build execution pipeline trigger. Dependency trees remained up to date.\n"
+            # Check if code files changed since the tag
+            CHANGED_FILES=$(git diff --name-only "$LATEST_TAG"..HEAD 2>/dev/null || true)
+
+            if echo "$CHANGED_FILES" | grep -q "main.go"; then
+              BODY="${BODY}- Updated logic in \`main.go\`\n"
+            fi
+            if echo "$CHANGED_FILES" | grep -q "main_test.go"; then
+              BODY="${BODY}- Updated unit tests in \`main_test.go\`\n"
             fi
 
-            if [[ "$current_go$current_sysd$current_dbus$current_sys" != "$latest_go$latest_sysd$latest_dbus$latest_sys" ]]; then
+            if [[ "$current_go$current_sysd$current_dbus$current_sys" != "$latest_go$latest_sysd$latest_dbus$latest_sys" || -n "$BODY" ]]; then
               NEEDS_UPDATE="true"
+            fi
+
+            if [[ -z "$BODY" ]]; then
+              BODY="- Workflow execution trigger. All dependencies and code remain up to date.\n"
             fi
           fi
 
           # -------------------------------------------------------------
-          # 4. SINGLE UNIFIED OUTPUT BLOCK (Outputs always defined)
+          # 4. SINGLE UNIFIED OUTPUT BLOCK
           # -------------------------------------------------------------
           {
             echo "needs_update=$NEEDS_UPDATE"
+            echo "changelog_exists=$CHANGELOG_EXISTS"
             echo "current_go=$current_go"
             echo "latest_go=$latest_go"
             echo "current_sysd=$current_sysd"
@@ -237,8 +248,8 @@ jobs:
           echo "release_number=$NEXT_NUM" >> "$GITHUB_OUTPUT"
           echo "Next release number: $NEXT_NUM"
 
-      - name: Write generated changelog to CHANGELOG.md (Cron / Dispatch)
-        if: github.event_name != 'push'
+      - name: Write generated changelog to CHANGELOG.md
+        if: needs.check-updates.outputs.changelog_exists != 'true'
         env:
           RAW_BODY: ${{ needs.check-updates.outputs.release_body }}
           RELEASE_NUMBER: ${{ steps.release_number.outputs.release_number }}
@@ -246,7 +257,7 @@ jobs:
           DATE_STR=$(date "+%Y-%m-%d")
           EXPANDED_BODY=$(printf "%b" "$RAW_BODY" | sed '/^$/d')
 
-          ENTRY="## [${RELEASE_NUMBER}] - ${DATE_STR}\n${EXPANDED_BODY}\n"
+          ENTRY="## [${RELEASE_NUMBER#v}] - ${DATE_STR}\n${EXPANDED_BODY}\n"
 
           if [[ -f CHANGELOG.md ]]; then
             awk -v entry="$ENTRY" '
@@ -270,7 +281,7 @@ jobs:
         env:
           RAW_BODY: ${{ needs.check-updates.outputs.release_body }}
           RELEASE_NUMBER: ${{ steps.release_number.outputs.release_number }}
-          TARGET_GO: ${{ needs.check-updates.outputs.latest_go }}
+          TARGET_GO: ${{ needs.check-updates.outputs.latest_go || needs.check-updates.outputs.current_go }}
           CHLOG_NAME: ${{ steps.import-gpg.outputs.name }}
           CHLOG_EMAIL: ${{ steps.import-gpg.outputs.email }}
         run: |
@@ -292,7 +303,7 @@ jobs:
           EOF
 
           sed -i '/%changelog/r changelog.tmp' systemd-lock-handler.spec
-          rm changelog.tmp
+          rm -f changelog.tmp
 
       - name: Install packaging dependencies
         run: |
