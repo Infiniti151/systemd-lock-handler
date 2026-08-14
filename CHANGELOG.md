@@ -1,5 +1,8 @@
 # Changelog
 
+## [18] - 2026-08-14
+- Upgraded Go compiler environment from **1.26.5** to **1.26.6**
+
 ## [17] - 2026-07-30
 - Added `wake.target` for handling post-resume tasks
 - Refactored target state transitions to use exclusive target switching
