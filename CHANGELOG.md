@@ -1,5 +1,8 @@
 # Changelog
 
+## [19] - 2026-08-20
+- Upgraded Go compiler environment from **1.26.6** to **1.27.0**
+
 ## [18] - 2026-08-14
 - Upgraded Go compiler environment from **1.26.5** to **1.26.6**
 
