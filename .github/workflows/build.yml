@@ -369,6 +369,7 @@ jobs:
       - name: Trigger COPR Build via API
         env:
           COPR_WEBHOOK_URL: ${{ secrets.COPR_PACKAGE_WEBHOOK_URL }}
+          BIN_NAME: ${{ github.event.repository.name }}
           RELEASE_NUMBER: ${{ needs.build-release.outputs.release_number }}
         run: |
           if [ -z "$COPR_WEBHOOK_URL" ]; then
@@ -378,6 +379,8 @@ jobs:
 
           echo "Triggering COPR build for release v${RELEASE_NUMBER}..."
 
+          BASE_URL=$(echo "$COPR_WEBHOOK_URL" | xargs)
+          FINAL_URL="${BASE_URL%/}/${BIN_NAME}/"
           MAX_RETRIES=3
           DELAY=5
           SUCCESS=false
@@ -385,7 +388,7 @@ jobs:
           for ((i=1; i<=MAX_RETRIES; i++)); do
             echo "Attempt $i of $MAX_RETRIES..."
 
-            if curl -fsSL -X POST "$COPR_WEBHOOK_URL"; then
+            if curl -fsSL -X POST "$FINAL_URL"; then
               echo "Successfully triggered COPR build!"
               SUCCESS=true
               break
