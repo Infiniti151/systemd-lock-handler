@@ -4,7 +4,7 @@
 %global target_go_ver 1.27.1
 
 Name:           systemd-lock-handler
-Version:        20
+Version:        21
 Release:        %autorelease
 Summary:        Systemd user service for lock/unlock events
 License:        ISC
@@ -132,6 +132,9 @@ echo "=*=*=*> Finished Install Phase - Moving to File Manifest <*=*=*="
 %systemd_user_postun %{name}.service
 
 %changelog
+* Wed Sep 09 2026 Infiniti151 <43163551+Infiniti151@users.noreply.github.com> - 21-1
+- Updated `x/sys` from v0.47.0 to v0.48.0
+
 * Wed Sep 02 2026 Infiniti151 <43163551+Infiniti151@users.noreply.github.com> - 20-1
 - Upgraded Go compiler environment from 1.27.0 to 1.27.1
 
