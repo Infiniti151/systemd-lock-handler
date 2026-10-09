@@ -1,5 +1,8 @@
 # Changelog
 
+## [22] - 2026-10-09
+- Upgraded Go compiler environment from **1.27.1** to **1.27.2**
+
 ## [21] - 2026-09-09
 - Updated `x/sys` from **v0.47.0** to **v0.48.0**
 
