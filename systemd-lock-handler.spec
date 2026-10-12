@@ -4,7 +4,7 @@
 %global target_go_ver 1.27.2
 
 Name:           systemd-lock-handler
-Version:        23
+Version:        24
 Release:        %autorelease
 Summary:        Systemd user service for lock/unlock events
 License:        ISC
@@ -132,6 +132,9 @@ echo "=*=*=*> Finished Install Phase - Moving to File Manifest <*=*=*="
 %systemd_user_postun %{name}.service
 
 %changelog
+* Mon Oct 12 2026 Infiniti151 <43163551+Infiniti151@users.noreply.github.com> - 24-1
+- Updated `godbus/dbus` from v5.2.2 to v5.2.3
+
 * Sat Oct 10 2026 Infiniti151 <43163551+Infiniti151@users.noreply.github.com> - 23-1
 - Updated `x/sys` from v0.48.0 to v0.49.0
 

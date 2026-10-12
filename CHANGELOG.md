@@ -1,5 +1,8 @@
 # Changelog
 
+## [24] - 2026-10-12
+- Updated `godbus/dbus` from **v5.2.2** to **v5.2.3**
+
 ## [23] - 2026-10-10
 - Updated `x/sys` from **v0.48.0** to **v0.49.0**
 
