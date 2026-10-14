@@ -1,5 +1,8 @@
 # Changelog
 
+## [25] - 2026-10-14
+- Updated `godbus/dbus` from **v5.2.3** to **v5.2.4**
+
 ## [24] - 2026-10-12
 - Updated `godbus/dbus` from **v5.2.2** to **v5.2.3**
 
