@@ -1,6 +1,6 @@
 module github.com/Infiniti151/systemd-lock-handler
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/coreos/go-systemd/v22 v22.7.0

@@ -1,5 +1,8 @@
 # Changelog
 
+## [26] - 2026-10-20
+- Upgraded Go compiler environment from **1.27.2** to **1.27.3**
+
 ## [25] - 2026-10-14
 - Updated `godbus/dbus` from **v5.2.3** to **v5.2.4**
 
