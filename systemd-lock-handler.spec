@@ -1,10 +1,10 @@
 %global debug_package %{nil}
 %global _find_debuginfo_dwz_opts %{nil}
 %global _build_id_links none
-%global target_go_ver 1.27.3
+%global target_go_ver 1.27.4
 
 Name:           systemd-lock-handler
-Version:        27
+Version:        28
 Release:        %autorelease
 Summary:        Systemd user service for lock/unlock events
 License:        ISC
@@ -132,6 +132,9 @@ echo "=*=*=*> Finished Install Phase - Moving to File Manifest <*=*=*="
 %systemd_user_postun %{name}.service
 
 %changelog
+* Wed Nov 11 2026 Infiniti151 <43163551+Infiniti151@users.noreply.github.com> - 28-1
+- Upgraded Go compiler environment from 1.27.3 to 1.27.4
+
 * Tue Nov 10 2026 Infiniti151 <43163551+Infiniti151@users.noreply.github.com> - 27-1
 - Updated `x/sys` from v0.49.0 to v0.50.0
 
